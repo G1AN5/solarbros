@@ -17,7 +17,7 @@
     "db:types": "supabase gen types typescript --linked > src/types/database.ts",
     "db:push": "supabase db push",
     "db:diff": "supabase db diff",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "verify:rls": "node scripts/verify-rls.mjs",
     "verify:staff": "node scripts/verify-staff-admin.mjs",
     "verify:settings": "node scripts/verify-settings.mjs",
