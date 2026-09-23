@@ -1,0 +1,381 @@
+/* ============================================================================
+   MOTION & THE SOLAR MOTIF
+   ----------------------------------------------------------------------------
+   Everything here is drawn with gradients and transforms. No images, no icon
+   font, no animation library — which matters because the constraint on this
+   project has always been that a prospect on mobile data in Paranaque, and a
+   technician on two bars of signal, should not pay for decoration.
+
+   WHAT THAT BUYS AND WHAT IT COSTS
+   A CSS gradient is a few hundred bytes and paints once. The animations below
+   move only `transform` and `opacity`, which the compositor handles on its own
+   thread — so they do not cause layout or repaint, and they do not stutter on a
+   cheap Android phone. Anything that would animate `width`, `top`, `filter` or
+   `box-shadow` is deliberately absent.
+
+   SCOPED TO WHERE IT EARNS ITS PLACE
+   The heavier motifs are limited to `.shell--public` and `.shell--auth`. The
+   three portals get hover and focus polish and nothing that runs on a loop:
+   a technician's battery is not the place for an animated sun.
+
+   REDUCED MOTION IS HONOURED PROPERLY
+   Not by shortening the durations — by stopping the movement. Someone who has
+   asked their operating system for less motion usually means it medically, and
+   a 40% faster parallax is still a parallax.
+   ========================================================================== */
+
+/* --- Scroll reveal -----------------------------------------------------------
+   Applied by useReveal(). The element starts slightly low and transparent, and
+   settles when it enters the viewport.
+
+   `will-change` is deliberately NOT set: it promotes every revealed element to
+   its own layer for the whole page lifetime, which on a long marketing page is
+   dozens of layers and a real memory cost for a 400ms animation. */
+
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition:
+    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Children stagger, so a row of cards arrives as a sequence rather than a
+   slab. Capped at six: past that the last card feels broken rather than
+   choreographed.
+
+   TWO SELECTORS, BECAUSE THERE ARE TWO SHAPES.
+   `<Reveal stagger className="grid">` makes the Reveal the row itself, and its
+   direct children are the cards. `<Reveal stagger>` wrapping an existing
+   `<div className="grid">` puts the cards one level deeper. Matching only the
+   direct children would silently do nothing in the second case — the whole row
+   would fade as one block and look, to anybody reading the code, as though the
+   stagger were simply not working. */
+.reveal--stagger > *,
+.reveal--stagger > [class*='grid'] > * {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition:
+    opacity 460ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal--stagger.is-visible > *,
+.reveal--stagger.is-visible > [class*='grid'] > * {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+.reveal--stagger.is-visible > *:nth-child(1),
+.reveal--stagger.is-visible > [class*='grid'] > *:nth-child(1) {
+  transition-delay: 0ms;
+}
+.reveal--stagger.is-visible > *:nth-child(2),
+.reveal--stagger.is-visible > [class*='grid'] > *:nth-child(2) {
+  transition-delay: 70ms;
+}
+.reveal--stagger.is-visible > *:nth-child(3),
+.reveal--stagger.is-visible > [class*='grid'] > *:nth-child(3) {
+  transition-delay: 140ms;
+}
+.reveal--stagger.is-visible > *:nth-child(4),
+.reveal--stagger.is-visible > [class*='grid'] > *:nth-child(4) {
+  transition-delay: 210ms;
+}
+.reveal--stagger.is-visible > *:nth-child(5),
+.reveal--stagger.is-visible > [class*='grid'] > *:nth-child(5) {
+  transition-delay: 280ms;
+}
+.reveal--stagger.is-visible > *:nth-child(6),
+.reveal--stagger.is-visible > [class*='grid'] > *:nth-child(6) {
+  transition-delay: 350ms;
+}
+
+/* ============================================================================
+   THE SUN
+   ----------------------------------------------------------------------------
+   A disc, a corona and eight rays, all drawn with gradients. The rays rotate
+   once a minute — slow enough that it reads as ambient rather than as something
+   demanding attention, which is the difference between atmosphere and a
+   distraction on a page somebody is trying to read.
+   ========================================================================== */
+
+.sun {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--sun-size, 280px);
+  height: var(--sun-size, 280px);
+  flex-shrink: 0;
+}
+
+/* The corona. A radial gradient that fades to nothing, so it blends into
+   whatever it is placed on without needing a matching background. */
+.sun::before {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(251, 191, 36, 0.32) 0%,
+    rgba(245, 158, 11, 0.16) 38%,
+    transparent 68%
+  );
+  animation: sun-breathe 7s ease-in-out infinite;
+}
+
+/* The rays. One element, eight rays, using repeating-conic-gradient — cheaper
+   than eight positioned divs and it scales to any size. */
+.sun::after {
+  content: '';
+  position: absolute;
+  inset: -6%;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(251, 191, 36, 0.5) 0deg 3deg,
+    transparent 3deg 45deg
+  );
+  /* Prefixed too: unprefixed mask-image only landed in Safari 15.4, and an
+     iPhone that ignores it renders the rays as a solid disc rather than a
+     sun. The fallback should be no mask, not a wrong shape. */
+  -webkit-mask-image: radial-gradient(circle, transparent 46%, #000 52%, #000 74%, transparent 80%);
+  mask-image: radial-gradient(circle, transparent 46%, #000 52%, #000 74%, transparent 80%);
+  animation: sun-rotate 60s linear infinite;
+}
+
+.sun__disc {
+  position: relative;
+  z-index: 1;
+  width: 58%;
+  height: 58%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 30%, #fffbeb 0%, var(--brand-300) 34%, var(--brand-500) 72%),
+    var(--brand-500);
+  box-shadow: 0 0 44px rgba(245, 158, 11, 0.45);
+}
+
+@keyframes sun-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sun-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+   THE PANEL ARRAY
+   ----------------------------------------------------------------------------
+   A photovoltaic array in perspective, drawn with two repeating linear
+   gradients for the cell grid and a third for the busbars. It sits behind the
+   sun in the hero and reads as "this is a solar company" faster than any
+   sentence does.
+   ========================================================================== */
+
+.panel-array {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius);
+  transform: perspective(900px) rotateX(46deg) rotateZ(-30deg);
+  transform-style: preserve-3d;
+  background:
+    /* cell grid */
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 25%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 16.6%),
+    /* the silicon itself, with a sheen across it */
+    linear-gradient(120deg, #1e3a5f 0%, #14304f 40%, #0d2440 100%);
+  box-shadow:
+    0 30px 60px -20px rgba(2, 6, 23, 0.7),
+    inset 0 0 0 2px rgba(148, 163, 184, 0.35);
+}
+
+/* The sheen. Travels across the panel every eight seconds, the way sunlight
+   moves over glass — the one thing that makes a flat rectangle read as a
+   reflective surface. */
+.panel-array::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.13) 46%,
+    rgba(255, 255, 255, 0.2) 50%,
+    transparent 66%
+  );
+  background-size: 300% 100%;
+  animation: panel-sheen 8s ease-in-out infinite;
+}
+
+@keyframes panel-sheen {
+  0%,
+  100% {
+    background-position: 160% 0;
+  }
+  55% {
+    background-position: -60% 0;
+  }
+}
+
+/* The two together: the array laid back in perspective, the sun above and
+   behind it. Sized by the container so one component serves the hero at full
+   size and the auth panel at half. */
+.solar-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  /* Tall enough to CONTAIN the panel. The panel is absolutely positioned and
+     rotated, so its painted area is larger than its box — at 320px it spilled
+     past the bottom of the hero column and collided with the trust strip
+     below, which is what made the hero look misaligned rather than layered. */
+  min-height: 420px;
+  isolation: isolate;
+  /* The rotation throws the far corner outside the grid cell. Clipping it to
+     the column keeps the panel from reaching past the container's right edge
+     on a wide screen. */
+  overflow: hidden;
+}
+
+.solar-mark .panel-array {
+  position: absolute;
+  /* Centred in the lower half rather than pinned by a percentage from the top,
+     so the composition holds as the container grows. */
+  top: 50%;
+  left: 50%;
+  translate: -50% -22%;
+  z-index: 0;
+}
+
+.solar-mark .sun {
+  position: relative;
+  z-index: 1;
+  /* Lifted so the disc sits above the panel's top edge — the sun rising over
+     the array, rather than resting on it. */
+  transform: translateY(-22%);
+}
+
+@media (max-width: 900px) {
+  /* On a phone the hero is read, not admired. The mark shrinks and the
+     perspective flattens so it takes a strip rather than a screenful. */
+  .solar-mark {
+    min-height: 260px;
+  }
+  .solar-mark .panel-array {
+    max-width: 280px;
+    transform: perspective(900px) rotateX(52deg) rotateZ(-26deg);
+  }
+}
+
+/* ============================================================================
+   HOVER AND PRESS
+   ----------------------------------------------------------------------------
+   Available everywhere, including the portals — these cost nothing when
+   nothing is being hovered, and a control that acknowledges the pointer is
+   easier to use whatever screen it is on.
+   ========================================================================== */
+
+/* A card that is genuinely clickable lifts. One that is not must NOT, or the
+   affordance stops meaning anything. */
+.card--interactive {
+  transition:
+    transform var(--transition-slow),
+    box-shadow var(--transition-slow),
+    border-color var(--transition);
+}
+.card--interactive:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
+}
+
+.btn {
+  transition:
+    transform 90ms ease,
+    box-shadow var(--transition),
+    background-color var(--transition),
+    border-color var(--transition),
+    color var(--transition);
+}
+/* Presses in rather than out. A button that grows under the finger covers the
+   thing it is about to do. */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn--primary:hover:not(:disabled) {
+  box-shadow: var(--shadow-brand);
+}
+
+/* A quiet underline that grows from the left, for text links in prose. */
+.link-underline {
+  position: relative;
+  text-decoration: none;
+}
+.link-underline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 1.5px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition-slow);
+}
+.link-underline:hover::after,
+.link-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ----------------------------------------------------------------------------
+   Stops the movement rather than speeding it up. Everything still arrives in
+   its final state — a revealed element that stayed at opacity 0 would be a
+   blank page, which is the classic way this preference gets implemented into
+   an unusable site.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal--stagger > *,
+  .reveal--stagger > [class*='grid'] > * {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .sun::before,
+  .sun::after,
+  .panel-array::after {
+    animation: none;
+  }
+
+  .card--interactive:hover {
+    transform: none;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}

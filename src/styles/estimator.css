@@ -1,0 +1,635 @@
+/* ============================================================================
+   SOLAR ESTIMATOR
+   ----------------------------------------------------------------------------
+   Styles for the public appliance-based estimator only.
+
+   PAYLOAD DISCIPLINE
+   This is the first page many prospects load, often on mobile data. So:
+     - no images, no icon font, no background graphics (icons are emoji)
+     - no box-shadow animation, no transforms on scroll, no parallax
+     - transitions limited to colour and border, which are cheap to composite
+     - the whole stylesheet is a few kilobytes and gzips to almost nothing
+
+   Everything below reads from the design tokens in tokens.css, so a brand
+   change never needs edits here.
+   ========================================================================== */
+
+/* --- Search ------------------------------------------------------------- */
+
+.est-search {
+  position: relative;
+  margin-bottom: var(--space-5);
+}
+
+.est-search input {
+  padding-left: var(--space-10);
+}
+
+.est-search__icon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* --- Category grouping --------------------------------------------------- */
+
+.est-cat {
+  margin-bottom: var(--space-6);
+}
+
+.est-cat__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.est-cat__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.est-cat__blurb {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* --- The appliance grid --------------------------------------------------- */
+
+.est-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.est-appliance {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  background: var(--bg-surface);
+  transition:
+    border-color var(--transition),
+    background-color var(--transition);
+}
+
+/* A selected appliance gets the brand tint so the eye can find it instantly
+   in a long list without needing to read every quantity. */
+.est-appliance.is-on {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+}
+
+/* Selected cards span the full row so their options have room to breathe. */
+.est-appliance.is-on {
+  grid-column: 1 / -1;
+}
+
+.est-appliance__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.est-appliance__id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.est-appliance__icon {
+  font-size: 1.15rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.est-appliance__name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.est-appliance__watts {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* --- Quantity stepper ----------------------------------------------------- */
+
+.est-qty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.est-qty__btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: border-color var(--transition);
+}
+
+.est-qty__btn:hover:not(:disabled) {
+  border-color: var(--brand-500);
+}
+
+.est-qty__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.est-qty__value {
+  min-width: 1.5rem;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Options revealed once an appliance is selected ---------------------- */
+
+.est-opts {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--brand-200);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.est-opt__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.est-opt__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.est-chips {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.est-chip {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    background-color var(--transition),
+    color var(--transition);
+}
+
+.est-chip:hover {
+  border-color: var(--brand-500);
+}
+
+.est-chip.is-on {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+  color: var(--ink-900);
+}
+
+.est-chip--dark.is-on {
+  background: var(--ink-900);
+  border-color: var(--ink-900);
+  color: var(--white);
+}
+
+.est-opt__note {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.est-opt__energy {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-brand);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Usage pattern cards -------------------------------------------------- */
+
+.est-patterns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.est-pattern {
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    background-color var(--transition);
+}
+
+.est-pattern:hover {
+  border-color: var(--brand-400);
+}
+
+.est-pattern.is-on {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+}
+
+.est-pattern__label {
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.est-pattern__desc {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-top: var(--space-2);
+  line-height: 1.5;
+}
+
+/* --- Running total bar ---------------------------------------------------- */
+
+.est-summary {
+  background: var(--ink-900);
+  color: var(--white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.est-summary__top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.est-summary__figure {
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--brand-400);
+  font-variant-numeric: tabular-nums;
+}
+
+.est-summary__unit {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink-300);
+  margin-left: var(--space-2);
+}
+
+.est-summary__sub {
+  font-size: var(--text-sm);
+  color: var(--ink-300);
+  margin-top: var(--space-2);
+}
+
+.est-summary__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.est-summary__meta label {
+  display: block;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-400);
+  margin-bottom: var(--space-2);
+}
+
+/* --- Results -------------------------------------------------------------- */
+
+.est-headline {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.est-headline em {
+  font-style: normal;
+  color: var(--text-brand);
+}
+
+/* Numbered "how we got here" explanation. Transparency builds trust in a
+   number the customer cannot verify themselves. */
+.est-steps {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.est-step {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  background: var(--bg-raised);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.est-step__n {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--ink-900);
+  color: var(--white);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.est-step--accent {
+  background: var(--brand-50);
+  color: var(--text-primary);
+}
+
+.est-step--accent .est-step__n {
+  background: var(--brand-500);
+  color: var(--ink-900);
+}
+
+/* --- Metric tiles --------------------------------------------------------- */
+
+.est-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3);
+}
+
+.est-metric {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  background: var(--bg-surface);
+}
+
+.est-metric__label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.est-metric__value {
+  font-size: var(--text-xl);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-top: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.est-metric__note {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}
+
+/* Payback callout gets the success tone — it is the number people came for. */
+.est-roi {
+  border-left: 3px solid var(--success-solid);
+  background: var(--success-bg);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+}
+
+.est-roi__value {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  color: var(--success-fg);
+  line-height: 1.2;
+}
+
+/* --- Consumption breakdown bars ------------------------------------------- */
+
+.est-bar__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding-block: var(--space-2);
+}
+
+.est-bar__track {
+  height: 8px;
+  background: var(--ink-100);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.est-bar__fill {
+  height: 100%;
+  background: var(--brand-500);
+  border-radius: var(--radius-full);
+}
+
+/* The single biggest consumer is worth calling out in a different colour —
+   it is usually the one the customer can act on. */
+.est-bar__fill--top {
+  background: var(--danger-solid);
+}
+
+/* --- Payment options ------------------------------------------------------ */
+
+.est-pay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+
+.est-pay__amount {
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--text-brand);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Watt explainer ------------------------------------------------------- */
+
+/* Built on <details> so it costs zero JavaScript. */
+.est-explain {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  padding: var(--space-4);
+}
+
+.est-explain > summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  list-style: none;
+}
+
+.est-explain > summary::-webkit-details-marker {
+  display: none;
+}
+
+.est-explain > summary::after {
+  content: ' ▾';
+  color: var(--text-muted);
+}
+
+.est-explain[open] > summary::after {
+  content: ' ▴';
+}
+
+.est-explain__body {
+  margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.est-analogy {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.est-analogy__card {
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.est-analogy__term {
+  font-weight: 800;
+  color: var(--text-brand);
+  font-size: var(--text-sm);
+}
+
+.est-analogy__body {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: var(--space-2);
+  line-height: 1.55;
+}
+
+/* A worked example is worth more than any definition. */
+.est-worked {
+  border-left: 3px solid var(--brand-500);
+  background: var(--brand-50);
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+/* --- Small screens -------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .est-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .est-summary__figure {
+    font-size: var(--text-2xl);
+  }
+
+  .est-appliance__top {
+    flex-wrap: wrap;
+  }
+}
+
+/* --- Sticky results column ------------------------------------------------
+   The public site header (.pub-header in layout.css) is sticky at top:0, so a
+   naive `top: 0` here would slide the running total underneath the navigation
+   and hide the headline figure. Offset by the header height.
+
+   Sticky is disabled on narrow screens, where the two-column grid collapses
+   and pinning the panel would trap it over the inputs the customer is using. */
+
+.est-sticky {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--space-4));
+}
+
+@media (max-width: 900px) {
+  .est-sticky {
+    position: static;
+  }
+}
+
+/* ============================================================================
+   COMPACT INTRO
+   ----------------------------------------------------------------------------
+   The estimator is a tool, not a pitch. With the public site's fluid display
+   scale, its headline filled an entire 900px viewport and pushed the appliance
+   picker below the fold — so a visitor who clicked "Calculate my savings"
+   arrived at a wall of text and had to scroll to find the thing they came for.
+
+   The persuading already happened on the page that sent them here.
+   ========================================================================== */
+
+.est-page {
+  padding-block: var(--space-10) var(--space-20);
+}
+
+.section-head--compact {
+  margin-bottom: var(--space-8);
+}
+.shell--public .section-head--compact h1 {
+  font-size: var(--display-3);
+  line-height: 1.15;
+}
+.section-head--compact p {
+  font-size: var(--text-md);
+  margin-top: var(--space-3);
+}

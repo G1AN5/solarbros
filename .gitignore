@@ -1,14 +1,78 @@
-node_modules/
-dist/
-dist-ssr/
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
 *.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment variables — NEVER commit real credentials.
+# `*.local` above already catches .env.local, but be explicit: a leaked
+# Supabase service_role key gives full read/write access to every table,
+# bypassing Row Level Security.
 .env
 .env.*
 !.env.example
-.DS_Store
-*.log
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
+
+# Supabase CLI working files. The `supabase/` folder itself IS committed —
+# migrations and config.toml are your version-controlled schema — but these
+# machine-specific subfolders are not.
+supabase/.temp/
+supabase/.branches/
+
+# Test & coverage output
 coverage/
-.supabase/
+playwright-report/
+test-results/
+
+# Shared VS Code workspace settings are committed so the team stays consistent.
+!.vscode/settings.json
+
+# Playwright MCP scratch output (page snapshots taken during verification)
+.playwright-mcp/
+
+# MCP server configuration. Ignored because it is the natural place for someone
+# to paste a Supabase personal access token, and that token grants management
+# access to every project the account can see. The committed template is
+# .mcp.json.example; the real file stays on each machine.
+.mcp.json
+
+# ============================================================================
+# OPERATIONAL SCRIPTS AND WORKING NOTES
+# ----------------------------------------------------------------------------
+# These are for running THIS deployment, not for anybody who clones the repo.
+#
+# The two SQL files empty the database, including every user account. They are
+# written to be pasted into the Supabase SQL editor by somebody who has read
+# them first. In a public repository they are an instruction manual for
+# destroying the system, sitting next to the project ref that names it.
+#
+# BUILD-PLAN.md is a development log — decisions, dead ends and the mistakes
+# made along the way. Useful to whoever is building; not part of the product.
+#
+# The handover docs (GOING-LIVE, AUTH-SETUP, WALKTHROUGH, PAYMENTS) ARE
+# committed on purpose: they are how somebody else runs this after you.
+# ============================================================================
+supabase/clear-demo-data.sql
+supabase/reset-to-production.sql
+docs/BUILD-PLAN.md
+
+# Local scratch
+scripts/clean-probes.mjs

@@ -1,0 +1,157 @@
+/* ============================================================================
+   DESIGN TOKENS
+   ----------------------------------------------------------------------------
+   Every colour, space, radius and shadow in the app comes from a variable
+   defined here. Nothing else in the codebase should hard-code a hex value.
+
+   Why: when SolarBros finalises its brand palette, you change these ~40 lines
+   and the entire application (4 portals, ~50 screens) re-skins itself.
+   ========================================================================== */
+
+:root {
+  /* --- Brand -------------------------------------------------------------
+     Amber = solar energy. Navy = enterprise trust. Teal = "clean/eco".      */
+  --brand-50: #fffbeb;
+  --brand-100: #fef3c7;
+  --brand-200: #fde68a;
+  --brand-300: #fcd34d;
+  --brand-400: #fbbf24;
+  --brand-500: #f59e0b; /* primary brand colour */
+  --brand-600: #d97706;
+  --brand-700: #b45309;
+  --brand-800: #92400e;
+  --brand-900: #78350f;
+
+  /* --- Eco accent ---------------------------------------------------------
+     Teal reads as "clean energy" without competing with the amber. Used for
+     savings figures, environmental stats and confirmation states, where amber
+     would look like a warning.                                              */
+  --eco-50: #f0fdfa;
+  --eco-100: #ccfbf1;
+  --eco-300: #5eead4;
+  --eco-500: #14b8a6;
+  --eco-600: #0d9488;
+  --eco-700: #0f766e;
+  --eco-800: #115e59;
+
+  /* --- Neutrals (slate scale) -------------------------------------------- */
+  --ink-950: #020617;
+  --ink-900: #0f172a; /* darkest surfaces: admin sidebar, footer */
+  --ink-800: #1e293b;
+  --ink-700: #334155;
+  --ink-600: #475569;
+  --ink-500: #64748b;
+  --ink-400: #94a3b8;
+  --ink-300: #cbd5e1;
+  --ink-200: #e2e8f0;
+  --ink-100: #f1f5f9;
+  --ink-50: #f8fafc;
+  --white: #ffffff;
+
+  /* --- Semantic status colours -------------------------------------------
+     Used by <Badge>, pipeline stages, project milestones and stock levels.  */
+  --success-bg: #dcfce7;
+  --success-fg: #15803d;
+  --success-solid: #16a34a;
+  --warning-bg: #fef3c7;
+  --warning-fg: #b45309;
+  --warning-solid: #f59e0b;
+  --danger-bg: #fee2e2;
+  --danger-fg: #b91c1c;
+  --danger-solid: #dc2626;
+  --info-bg: #dbeafe;
+  --info-fg: #1d4ed8;
+  --info-solid: #2563eb;
+  --neutral-bg: #f1f5f9;
+  --neutral-fg: #475569;
+
+  /* --- Applied roles ------------------------------------------------------
+     Components reference THESE, not the raw scales above. Swapping a role
+     (e.g. --surface) re-themes without touching every component.            */
+  --bg-page: var(--ink-50);
+  --bg-surface: var(--white);
+  --bg-raised: var(--ink-100);
+  --bg-inverse: var(--ink-900);
+
+  --text-primary: var(--ink-900);
+  --text-secondary: var(--ink-600);
+  --text-muted: var(--ink-400);
+  --text-inverse: var(--white);
+  --text-brand: var(--brand-700);
+
+  --border: var(--ink-200);
+  --border-strong: var(--ink-300);
+
+  /* --- Typography --------------------------------------------------------- */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, monospace;
+
+  /* Two audiences, two densities. The portals are dense data screens where
+     14px is right and more would mean scrolling to read a table. The public
+     site is read by a homeowner deciding whether to spend PHP 400,000, often
+     on a phone — 14px there looks like small print, which is exactly the wrong
+     signal. `.shell--public` lifts the base to 16px in base.css. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
+
+  /* Marketing headings scale with the viewport rather than stepping at a
+     breakpoint, so a hero never looks oversized on a phone or lost on a
+     desktop. The clamp floor is the phone size and the ceiling is deliberate:
+     type that keeps growing on a wide monitor stops being readable. */
+  --display-1: clamp(2.25rem, 1.4rem + 3.6vw, 3.75rem);
+  --display-2: clamp(1.75rem, 1.2rem + 2.2vw, 2.75rem);
+  --display-3: clamp(1.375rem, 1.1rem + 1.2vw, 1.875rem);
+
+  /* --- Spacing scale (4px base) ------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* --- Radii & shadows ----------------------------------------------------- */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* Layered rather than single-stop: a tight contact shadow plus a wider,
+     softer one reads as a real object sitting on a surface. One large blurry
+     shadow reads as a sticker. */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 2px 4px rgba(15, 23, 42, 0.04), 0 8px 20px -4px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 4px 8px rgba(15, 23, 42, 0.04), 0 20px 40px -8px rgba(15, 23, 42, 0.14);
+  /* For anything sitting on the amber brand colour, where a grey shadow looks
+     like dirt. */
+  --shadow-brand: 0 6px 18px -4px rgba(217, 119, 6, 0.45);
+
+  /* --- Layout dimensions ---------------------------------------------------
+     Shared by the sidebar layouts so content offsets always match the rail. */
+  --sidebar-w: 248px;
+  --topbar-h: 60px;
+  --fieldnav-h: 64px;
+  --content-max: 1240px;
+
+  --transition: 150ms ease;
+  --transition-slow: 240ms cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* One focus treatment everywhere, defined once. A ring rather than a plain
+     outline so it stays visible against both white cards and the dark hero. */
+  --focus-ring: 0 0 0 3px rgba(245, 158, 11, 0.45);
+}

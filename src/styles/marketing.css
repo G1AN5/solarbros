@@ -1,0 +1,702 @@
+/* ============================================================================
+   MARKETING STYLES
+   Only used by the public (unauthenticated) lead-generation site. Kept separate
+   from components.css because the internal portals never need any of it.
+   ========================================================================== */
+
+/* --- Hero --------------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 85% 0%, rgba(245, 158, 11, 0.28), transparent 60%),
+    radial-gradient(90% 80% at 0% 100%, rgba(20, 184, 166, 0.14), transparent 55%),
+    linear-gradient(165deg, var(--ink-950) 0%, var(--ink-900) 45%, #2a1a08 100%);
+  color: var(--white);
+  padding-block: var(--space-20) var(--space-16);
+}
+
+/* A faint grid, drawn in CSS rather than loaded as an image. It gives the
+   gradient something to sit on so it does not read as a flat wash, and it
+   costs nothing on a phone connection — which is the whole constraint on this
+   site. Masked so it fades out before it reaches the text. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(80% 60% at 70% 20%, #000 30%, transparent 75%);
+  mask-image: radial-gradient(80% 60% at 70% 20%, #000 30%, transparent 75%);
+  pointer-events: none;
+}
+.hero__inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: var(--space-12);
+  align-items: center;
+}
+.hero__title {
+  font-size: var(--display-1);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+  /* Long headlines break more sensibly when the browser balances the lines
+     rather than leaving one word stranded on the last row. */
+  text-wrap: balance;
+}
+/* Wrap the words that carry the promise in this to tint them amber. */
+.hero__title em {
+  font-style: normal;
+  color: var(--brand-400);
+}
+.hero__sub {
+  font-size: var(--text-lg);
+  color: var(--ink-300);
+  max-width: 52ch;
+  margin-top: var(--space-5);
+}
+/* Small capitalised line above the headline. */
+.hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-5);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--brand-200);
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 900px) {
+  .hero__inner {
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+  }
+}
+
+/* Trust-signal strip under the hero (homes powered, warranty years, etc.). */
+.trust-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-xl);
+  /* No backdrop-filter. It forces a separate compositing layer and is
+     noticeably expensive on the mid-range Android phones most of these
+     visitors are using — for an effect nobody would miss. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.trust-strip > * + * {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  padding-left: var(--space-5);
+}
+@media (max-width: 640px) {
+  .trust-strip > * + * {
+    border-left: 0;
+    padding-left: 0;
+  }
+}
+.trust-strip__value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--brand-400);
+}
+.trust-strip__label {
+  font-size: var(--text-sm);
+  color: var(--ink-300);
+}
+
+/* --- Section heading ------------------------------------------------------------ */
+
+.section-head {
+  max-width: 62ch;
+  margin: 0 auto var(--space-12);
+  text-align: center;
+}
+.section-head p {
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  margin-top: var(--space-4);
+  margin-inline: auto;
+  text-wrap: pretty;
+}
+.section-head h1,
+.section-head h2 {
+  text-wrap: balance;
+}
+/* The small amber label above a section heading.
+
+   SCOPED to the public shell on purpose. `.eyebrow` already exists in
+   components.css and the portals use it; marketing.css loads afterwards, so an
+   unscoped rule here would silently restyle every eyebrow in the admin screens
+   too. Only the public site wants the larger, roomier version. */
+.shell--public .eyebrow {
+  display: inline-block;
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  letter-spacing: 0.08em;
+  color: var(--brand-700);
+}
+
+/* --- Pricing / package cards ------------------------------------------------------ */
+
+.pkg {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6);
+  gap: var(--space-4);
+}
+.pkg--featured {
+  position: relative;
+  border-color: var(--brand-500);
+  box-shadow: var(--shadow-lg);
+}
+/* The recommended option should be visibly the recommended option, without
+   needing a bigger font or a different layout. */
+@media (min-width: 900px) {
+  .pkg--featured {
+    transform: scale(1.03);
+    z-index: 1;
+  }
+}
+.pkg--featured::before {
+  content: 'Most popular';
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--brand-500);
+  color: var(--ink-950);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+}
+.pkg__price {
+  font-size: var(--display-3);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  /* Tabular figures so prices in adjacent cards line up on the decimal rather
+     than drifting — three prices that do not align read as careless on the one
+     page where you least want that. */
+  font-variant-numeric: tabular-nums;
+}
+.pkg__price small {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+.pkg__features li {
+  display: flex;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+.pkg__features li::before {
+  content: '✓';
+  color: var(--success-solid);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* --- Process / "how it works" steps ------------------------------------------------ */
+
+.step {
+  position: relative;
+  padding-top: var(--space-6);
+}
+.step__num {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(180deg, var(--brand-400), var(--brand-600));
+  color: var(--ink-950);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-4);
+  box-shadow: var(--shadow-brand);
+}
+
+/* --- Portfolio gallery -------------------------------------------------------------- */
+
+.portfolio-item {
+  overflow: hidden;
+}
+/* Shown when a portfolio entry has no cover image yet. Deliberately not a
+   grey box: it stays on-brand so a half-populated gallery still looks
+   deliberate rather than broken. */
+.portfolio-item__media {
+  aspect-ratio: 16 / 10;
+  background:
+    radial-gradient(70% 70% at 30% 20%, rgba(245, 158, 11, 0.3), transparent 60%),
+    linear-gradient(135deg, var(--ink-800), var(--ink-900));
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: var(--text-sm);
+}
+.portfolio-item__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* --- Testimonials --------------------------------------------------------------------- */
+
+.review__stars {
+  color: var(--brand-500);
+  letter-spacing: 2px;
+}
+.review__quote {
+  font-size: var(--text-md);
+  line-height: 1.65;
+  margin-block: var(--space-4);
+  color: var(--text-primary);
+}
+.review__quote::before {
+  content: '\201C';
+  color: var(--brand-300);
+  font-size: 2.5em;
+  line-height: 0;
+  vertical-align: -0.35em;
+  margin-right: 0.05em;
+}
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  background: var(--brand-100);
+  color: var(--brand-700);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* --- FAQ accordion ---------------------------------------------------------------------- */
+
+.faq__item {
+  border-bottom: 1px solid var(--border);
+}
+.faq__q {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.faq__a {
+  padding-bottom: var(--space-4);
+  color: var(--text-secondary);
+  max-width: 75ch;
+}
+
+/* --- Booking calendar ---------------------------------------------------------------------- */
+
+.cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-1);
+}
+.cal__dow {
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-bottom: var(--space-2);
+}
+.cal__day {
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  display: grid;
+  place-items: center;
+  transition: var(--transition);
+}
+.cal__day:disabled {
+  background: var(--bg-page);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.cal__day:not(:disabled):hover {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+}
+.cal__day.is-selected {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+  color: var(--ink-950);
+  font-weight: 700;
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-2);
+}
+.slot {
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  transition: var(--transition);
+}
+.slot:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+.slot:not(:disabled):hover {
+  border-color: var(--brand-500);
+}
+.slot.is-selected {
+  background: var(--ink-900);
+  border-color: var(--ink-900);
+  color: var(--white);
+}
+
+/* --- Estimator result panel ------------------------------------------------------------------ */
+
+.estimate-result {
+  background: linear-gradient(150deg, var(--ink-900), var(--ink-800));
+  color: var(--white);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+}
+.estimate-result__big {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--brand-400);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Comparison table (on-grid / hybrid / off-grid) --------------------------------------------- */
+
+.compare td:first-child {
+  font-weight: 600;
+  background: var(--bg-page);
+}
+.compare .yes {
+  color: var(--success-fg);
+  font-weight: 700;
+}
+.compare .no {
+  color: var(--text-muted);
+}
+
+/* ============================================================================
+   SECTION SYSTEM
+   ----------------------------------------------------------------------------
+   The public site used to alternate `.section` (#f8fafc) with `.section--alt`
+   (#ffffff). Those two colours are about 2% apart, so the page read as one
+   undifferentiated white scroll — a prospect could not tell where "Packages"
+   ended and "How it works" began, and nothing invited them to keep going.
+
+   The fix is not more borders. It is giving each section a surface of its own,
+   so the rhythm of the page does the separating:
+
+     --plain   white .............. cards, dense content, anything with photos
+     --muted   warm grey .......... the default resting tone
+     --warm    amber tint ......... "here is what you get" / pricing
+     --eco     teal tint .......... savings, environmental, reassurance
+     --dark    near-black ......... proof, testimonials, the closing CTA
+
+   Every one of these is a flat colour or a two-stop gradient. No images, no
+   filters, nothing that costs a download or a repaint — the constraint on this
+   site has always been that a prospect on mobile data in Paranaque should not
+   pay for decoration.
+   ========================================================================== */
+
+.section--plain {
+  background: var(--bg-surface);
+}
+
+.section--muted {
+  /* Warmer than the old #f8fafc. Against white it is clearly a different
+     surface rather than a rendering artefact. */
+  background: #f4f5f8;
+}
+
+.section--warm {
+  background: linear-gradient(180deg, var(--brand-50) 0%, #fffdf7 100%);
+}
+
+.section--eco {
+  background: linear-gradient(180deg, var(--eco-50) 0%, #f7fffd 100%);
+}
+
+.section--dark {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(90% 70% at 15% 0%, rgba(245, 158, 11, 0.16), transparent 60%),
+    linear-gradient(170deg, var(--ink-950), var(--ink-900) 60%, #1a1206 100%);
+  color: var(--white);
+}
+.section--dark h1,
+.section--dark h2,
+.section--dark h3,
+.section--dark h4 {
+  color: var(--white);
+}
+.section--dark p,
+.section--dark .muted {
+  color: var(--ink-300);
+}
+.section--dark .eyebrow,
+.section--dark .section-head .eyebrow {
+  color: var(--brand-400);
+}
+/* Same CSS grid texture as the hero, so the dark sections feel like the same
+   material rather than three unrelated dark boxes. */
+.section--dark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 0%, #000 20%, transparent 80%);
+  mask-image: radial-gradient(70% 60% at 50% 0%, #000 20%, transparent 80%);
+  pointer-events: none;
+}
+
+/* A hairline where two light sections meet and the tonal shift alone is
+   subtle — between --plain and --muted, for instance. */
+.section--edge {
+  border-top: 1px solid var(--border);
+}
+
+/* ============================================================================
+   SECTION DIVIDERS
+   ----------------------------------------------------------------------------
+   An angled edge between a dark section and a light one. Drawn with a clip-path
+   on a pseudo-element, so it is geometry rather than an SVG to download, and it
+   scales to any width without distorting.
+   ========================================================================== */
+
+.section--slope-bottom {
+  position: relative;
+  padding-bottom: calc(var(--space-20) + 40px);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 40px), 0 100%);
+}
+.section--slope-top {
+  margin-top: -40px;
+  padding-top: calc(var(--space-20) + 40px);
+  clip-path: polygon(0 40px, 100% 0, 100% 100%, 0 100%);
+}
+@media (max-width: 640px) {
+  /* A 40px slope across a 390px screen is a steep diagonal that looks like a
+     mistake. Straight edges below the fold width. */
+  .section--slope-bottom,
+  .section--slope-top {
+    clip-path: none;
+    padding-block: var(--space-16);
+    margin-top: 0;
+  }
+}
+
+/* ============================================================================
+   SECTION HEADINGS, ALIGNED LEFT
+   ----------------------------------------------------------------------------
+   Every heading centred makes a long page monotonous. A left-aligned variant,
+   used where the section has an asymmetric layout anyway.
+   ========================================================================== */
+
+.section-head--left {
+  margin-inline: 0;
+  text-align: left;
+  max-width: 46ch;
+}
+.section-head--left p {
+  margin-inline: 0;
+}
+
+/* A short amber rule under a heading — a small piece of punctuation that tells
+   the eye a new block has started. */
+.section-head__rule {
+  display: block;
+  width: 52px;
+  height: 3px;
+  margin: var(--space-5) auto 0;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--brand-500), var(--brand-300));
+}
+.section-head--left .section-head__rule {
+  margin-inline: 0;
+}
+
+/* ============================================================================
+   FEATURE CARDS
+   ----------------------------------------------------------------------------
+   Used for "why choose us" style grids, where a bare card on a bare background
+   is the dullest thing on the page.
+   ========================================================================== */
+
+.feature {
+  position: relative;
+  padding: var(--space-6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow var(--transition-slow),
+    transform var(--transition-slow),
+    border-color var(--transition-slow);
+}
+.feature:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-200);
+  transform: translateY(-2px);
+}
+/* The amber bar that appears along the top edge on hover. */
+.feature::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(90deg, var(--brand-500), var(--brand-300));
+  opacity: 0;
+  transition: opacity var(--transition-slow);
+}
+.feature:hover::after {
+  opacity: 1;
+}
+.feature__icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--brand-50);
+  font-size: var(--text-xl);
+}
+.feature--eco .feature__icon {
+  background: var(--eco-50);
+}
+
+/* On a dark section the same card inverts rather than punching a white hole. */
+.section--dark .feature {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+.section--dark .feature:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.section--dark .feature__icon {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+/* ============================================================================
+   PAGE BANNER
+   ----------------------------------------------------------------------------
+   Every public page other than the homepage used to open with a bare heading on
+   the same grey as everything under it. That gives a prospect nothing to land
+   on: no sense of where they are, and no visual break between the navigation
+   and the content.
+
+   A compact dark band fixes it, and reuses the hero's material — the same
+   gradient and the same CSS grid — so the pages feel like one site rather than
+   a set of templates.
+   ========================================================================== */
+
+.page-banner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding-block: var(--space-12);
+  background:
+    radial-gradient(100% 120% at 90% 0%, rgba(245, 158, 11, 0.22), transparent 60%),
+    linear-gradient(160deg, var(--ink-950), var(--ink-900) 70%, #241705 100%);
+  color: var(--white);
+}
+.page-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(75% 80% at 60% 10%, #000 25%, transparent 80%);
+  pointer-events: none;
+}
+.page-banner__eyebrow {
+  display: inline-block;
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-400);
+}
+.page-banner h1 {
+  color: var(--white);
+  text-wrap: balance;
+}
+.page-banner p {
+  margin-top: var(--space-4);
+  color: var(--ink-300);
+  font-size: var(--text-lg);
+  max-width: 60ch;
+}
+/* Small stat chips along the bottom of the banner, where a page has numbers
+   worth leading with. */
+.page-banner__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.page-banner__stat strong {
+  display: block;
+  font-size: var(--text-2xl);
+  color: var(--brand-400);
+  letter-spacing: -0.02em;
+}
+.page-banner__stat span {
+  font-size: var(--text-sm);
+  color: var(--ink-400);
+}

@@ -1,0 +1,29 @@
+# ============================================================================
+# SolarBros
+# ----------------------------------------------------------------------------
+# The marketing site should be indexed. Nothing behind a login should be.
+#
+# This is a REQUEST, not a control. A well-behaved crawler honours it; a
+# malicious one reads this file specifically to find the paths worth probing.
+# Every path below is protected by Row Level Security regardless — robots.txt
+# keeps private pages out of search results, nothing more.
+# ============================================================================
+
+User-agent: *
+
+# Authenticated portals
+Disallow: /portal
+Disallow: /admin
+Disallow: /field
+
+# Unlisted employee entrance. Kept out of search results so a customer never
+# lands on a staff form — not as a security control, which is RLS's job.
+Disallow: /staff
+Disallow: /team
+
+# Development reference page
+Disallow: /site-map
+
+Allow: /
+
+Sitemap: https://solarbros.ph/sitemap.xml

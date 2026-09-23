@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- ========================================================================
+         BRANDING
+         ------------------------------------------------------------------------
+         The logo lives in public/, NOT src/assets/, because everything in
+         public/ is copied to the site root untouched and can be referenced by a
+         fixed URL. A favicon has to be fetchable at a stable path before any
+         JavaScript runs, so it cannot be a bundled import with a hashed name.
+
+         If solarbroslogo.jpg is missing the tab simply falls back to the
+         browser's blank page icon — nothing breaks, and the in-app logo falls
+         back to a drawn sun (see src/components/layout/Logo.tsx).
+
+         A JPG works but is not ideal for an icon: no transparency, so a
+         non-square logo is letterboxed against white. A square PNG with a
+         transparent background is the better asset when there is one.
+         ===================================================================== -->
+    <link rel="icon" type="image/jpeg" href="/solarbroslogo.jpg" />
+    <link rel="apple-touch-icon" href="/solarbroslogo.jpg" />
+
+    <!-- Tints the browser chrome on Android and the title bar on desktop PWA
+         installs. Matches --brand-500 in src/styles/tokens.css. -->
+    <meta name="theme-color" content="#f59e0b" />
+
+    <!-- The fallback title. Each screen replaces it with its own once React is
+         running — see usePageTitle. This is what shows in the fraction of a
+         second before that, and in a bookmark made from a cold load. -->
+    <title>SolarBros</title>
+    <meta
+      name="description"
+      content="SolarBros — solar energy solutions and photovoltaic installation for homes and businesses in Metro Manila, Cavite, Laguna and Rizal."
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "eamodio.gitlens",
+    "GitHub.vscode-pull-request-github",
+    "usernamehw.errorlens",
+    "yoavbls.pretty-ts-errors",
+    "dsznajder.es7-react-js-snippets",
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense",
+    "mikestead.dotenv",
+    "vitest.explorer",
+    "ms-playwright.playwright",
+    "EditorConfig.EditorConfig"
+  ]
+}

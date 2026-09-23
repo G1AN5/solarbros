@@ -1,0 +1,493 @@
+/* ============================================================================
+   LAYOUT PRIMITIVES + THE FOUR PORTAL SHELLS
+   ----------------------------------------------------------------------------
+   The app has four distinct "shells", one per audience:
+
+     .shell--public   header + scrolling content + footer      (marketing site)
+     .shell--auth     centred card on a split background       (login screens)
+     .shell--console  fixed sidebar + topbar + content         (client & admin)
+     .shell--field    topbar + content + bottom tab bar        (mobile technician)
+   ========================================================================== */
+
+/* --- Generic helpers -------------------------------------------------------- */
+
+.container {
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+}
+
+.container--narrow {
+  max-width: 780px;
+}
+
+/* Vertical stack with a configurable gap — replaces ad-hoc margins. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.stack--sm {
+  gap: var(--space-2);
+}
+.stack--lg {
+  gap: var(--space-8);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.row--between {
+  justify-content: space-between;
+}
+.row--wrap {
+  flex-wrap: wrap;
+}
+
+/* Auto-fitting card grid: columns collapse responsively with no media query. */
+.grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(var(--col-min, 260px), 1fr));
+}
+.grid--2 {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+.grid--4 {
+  --col-min: 200px;
+}
+
+.section {
+  padding-block: var(--space-20);
+}
+.section--tight {
+  padding-block: var(--space-12);
+}
+.section--alt {
+  background: var(--bg-surface);
+}
+
+/* ============================================================================
+   1. PUBLIC SHELL — marketing / lead-generation site
+   ========================================================================== */
+
+.shell--public {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.shell--public > main {
+  flex: 1;
+}
+
+.pub-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /* Opaque rather than translucent-with-blur. `backdrop-filter` on a sticky
+     element repaints a blurred copy of the page on every scroll frame, which
+     is the single most expensive thing on this site for the mid-range Android
+     phones most of these visitors use — in exchange for an effect nobody would
+     notice was missing. */
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.pub-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  height: var(--topbar-h);
+}
+.pub-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.pub-nav a {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: var(--transition);
+}
+.pub-nav a:hover {
+  background: var(--bg-raised);
+  color: var(--text-primary);
+}
+.pub-nav a.is-active {
+  color: var(--text-brand);
+  background: var(--brand-50);
+}
+
+/* The hamburger. Hidden on desktop, where the full nav is visible. */
+.pub-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.pub-mobile-nav {
+  display: none;
+}
+
+/* Nav collapses on small screens — the public site is mobile-heavy traffic,
+   so the links move into a panel rather than disappearing. */
+@media (max-width: 900px) {
+  .pub-nav {
+    display: none;
+  }
+  /* The header keeps only the logo and the burger. Two small buttons plus a
+     wordmark in a 390px bar leaves nothing legible. */
+  .pub-header__actions {
+    display: none;
+  }
+  .pub-burger {
+    display: inline-flex;
+  }
+
+  .pub-mobile-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4) var(--space-6) var(--space-6);
+    border-top: 1px solid var(--border);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-lg);
+    /* Scrolls independently if the viewport is short — a phone in landscape
+       otherwise hides the last few links with no way to reach them. */
+    max-height: calc(100dvh - var(--topbar-h));
+    overflow-y: auto;
+  }
+  .pub-mobile-nav a {
+    padding: var(--space-3);
+    border-radius: var(--radius);
+    font-size: var(--text-md);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .pub-mobile-nav a.is-active {
+    color: var(--text-brand);
+    background: var(--brand-50);
+  }
+  .pub-mobile-nav__actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+  }
+}
+
+.pub-footer {
+  background: var(--ink-900);
+  color: var(--ink-300);
+  padding-block: var(--space-16) var(--space-8);
+}
+.pub-footer h4 {
+  color: var(--white);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-3);
+}
+.pub-footer a {
+  display: block;
+  padding-block: var(--space-1);
+  color: var(--ink-400);
+  font-size: var(--text-base);
+  transition: var(--transition);
+}
+.pub-footer a:hover {
+  color: var(--brand-400);
+}
+.pub-footer__bottom {
+  margin-top: var(--space-10);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--ink-800);
+  font-size: var(--text-sm);
+  color: var(--ink-500);
+}
+
+/* ============================================================================
+   2. AUTH SHELL — login / register / password reset
+   ========================================================================== */
+
+.shell--auth {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+}
+.shell--auth__aside {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Same material as the marketing hero — a customer arriving from the site
+     should not feel they have been handed to a different company at the door.
+     Two radial washes over the base so the panel has depth rather than reading
+     as one flat diagonal. */
+  background:
+    radial-gradient(90% 70% at 80% 0%, rgba(245, 158, 11, 0.3), transparent 62%),
+    radial-gradient(80% 70% at 0% 100%, rgba(20, 184, 166, 0.14), transparent 58%),
+    linear-gradient(150deg, var(--ink-950), var(--ink-900) 55%, #2a1a08);
+  color: var(--white);
+  padding: var(--space-12);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+/* The same CSS grid texture the hero uses, for the same reason: a plain
+   gradient reads as a rendering artefact, a gradient on a grid reads as a
+   surface. Costs nothing and loads nothing. */
+.shell--auth__aside::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(80% 70% at 70% 20%, #000 25%, transparent 78%);
+  mask-image: radial-gradient(80% 70% at 70% 20%, #000 25%, transparent 78%);
+  pointer-events: none;
+}
+
+/* The mark sits low and bleeds off the bottom corner, so it frames the panel
+   rather than competing with the sentence above it. */
+.shell--auth__mark {
+  position: absolute;
+  right: -12%;
+  bottom: -14%;
+  width: 78%;
+  z-index: -1;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.shell--auth__main {
+  display: grid;
+  place-items: center;
+  padding: var(--space-8);
+  background: var(--bg-surface);
+  /* A very faint warm wash from the top, so the form side is not a flat white
+     rectangle against a rich panel. */
+  background-image: radial-gradient(120% 60% at 50% 0%, var(--brand-50), transparent 60%);
+}
+.shell--auth__form {
+  width: 100%;
+  max-width: 380px;
+}
+@media (max-width: 860px) {
+  .shell--auth {
+    grid-template-columns: 1fr;
+  }
+  .shell--auth__aside {
+    display: none;
+  }
+}
+
+/* ============================================================================
+   3. CONSOLE SHELL — client portal + admin operations hub
+   Both use the same skeleton; only the sidebar contents and accent differ.
+   ========================================================================== */
+
+.shell--console {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  /* A very slight vertical gradient rather than one flat slab. On a 1080px-tall
+     rail, flat #0f172a reads as a dead area of the screen; the shift gives it
+     the sense of a surface without becoming a decorative element in its own
+     right. */
+  background: linear-gradient(180deg, var(--ink-900) 0%, #0b1220 100%);
+  color: var(--ink-300);
+  border-right: 1px solid rgba(148, 163, 184, 0.09);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--topbar-h);
+  padding-inline: var(--space-5);
+  border-bottom: 1px solid var(--ink-800);
+  flex-shrink: 0;
+}
+.sidebar__nav {
+  padding: var(--space-4) var(--space-3);
+  flex: 1;
+}
+/* Small uppercase label that groups related destinations in the rail. */
+.sidebar__group {
+  padding: var(--space-4) var(--space-3) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+.sidebar__link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: 2px;
+  border-radius: var(--radius);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--ink-400);
+  transition:
+    background-color var(--transition),
+    color var(--transition);
+}
+.sidebar__link:hover {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--white);
+}
+
+/* The active item was a solid amber block — the single loudest thing on the
+   screen, competing with the page content it was only meant to label. A tinted
+   row with a brand rail down the left says "you are here" just as clearly and
+   lets the data win. */
+.sidebar__link.is-active {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--white);
+  font-weight: 600;
+}
+.sidebar__link.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 62%;
+  border-radius: 0 2px 2px 0;
+  background: var(--brand-400);
+}
+.sidebar__link.is-active .sidebar__icon {
+  color: var(--brand-400);
+}
+.sidebar__icon {
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: var(--text-md);
+}
+.sidebar__footer {
+  padding: var(--space-4);
+  border-top: 1px solid var(--ink-800);
+  flex-shrink: 0;
+}
+
+.console-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* lets wide tables scroll instead of blowing out the grid */
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-inline: var(--space-6);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.console-content {
+  padding: var(--space-6);
+  flex: 1;
+}
+
+@media (max-width: 1024px) {
+  .shell--console {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    display: none;
+  }
+}
+
+/* ============================================================================
+   4. FIELD SHELL — mobile-first technician portal
+   Constrained to a phone-width column even on desktop, so you can preview the
+   real technician experience without opening dev-tools device mode.
+   ========================================================================== */
+
+.shell--field {
+  min-height: 100vh;
+  max-width: 520px;
+  margin-inline: auto;
+  background: var(--bg-surface);
+  border-inline: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.field-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--ink-900);
+  color: var(--white);
+  padding: var(--space-4) var(--space-4);
+}
+.field-content {
+  flex: 1;
+  padding: var(--space-4);
+  padding-bottom: calc(var(--fieldnav-h) + var(--space-6));
+  background: var(--bg-page);
+}
+.field-nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: var(--fieldnav-h);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+}
+.field-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+.field-nav a.is-active {
+  color: var(--text-brand);
+}
+.field-nav__icon {
+  font-size: var(--text-lg);
+}

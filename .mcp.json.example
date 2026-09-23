@@ -1,0 +1,33 @@
+{
+  "_comment": [
+    "Copy this to .mcp.json. The real file is gitignored.",
+    "",
+    "There is deliberately NO access token in here. The Supabase MCP server and",
+    "the Supabase CLI both read SUPABASE_ACCESS_TOKEN from the environment, so",
+    "the token lives in exactly one place instead of two that can disagree.",
+    "",
+    "Set it once, at the Windows User scope:",
+    "  [Environment]::SetEnvironmentVariable('SUPABASE_ACCESS_TOKEN','sbp_...','User')",
+    "",
+    "Generate one at https://supabase.com/dashboard/account/tokens",
+    "",
+    "--read-only is on purpose: it lets the assistant inspect the schema and",
+    "query data without being able to write. Migrations go through the CLI,",
+    "where they are reviewed as files first."
+  ],
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--read-only",
+        "--project-ref=YOUR_PROJECT_REF"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    }
+  }
+}

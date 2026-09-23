@@ -1,0 +1,9 @@
+# Runs before every commit.
+# lint-staged only touches the files you actually staged, so this stays fast
+# even as the project grows. It auto-fixes ESLint issues and formats with
+# Prettier, then re-stages the result.
+npx lint-staged
+
+# Type errors must never reach a commit — they are cheap to catch here and
+# expensive to debug in CI.
+npm run typecheck

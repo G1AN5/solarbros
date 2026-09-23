@@ -1,0 +1,172 @@
+/* ============================================================================
+   DATA-VISUALISATION TOKENS
+   ----------------------------------------------------------------------------
+   Deliberately SEPARATE from the brand tokens in tokens.css.
+
+   RULE: brand amber is for interactive chrome (buttons, active nav, highlights).
+   Charts use this validated blue palette instead. Two reasons:
+     1. Amber sits below 3:1 contrast on white — poor for data marks.
+     2. Keeping data ink visually distinct from action ink stops the dashboard
+        turning into an undifferentiated amber wash.
+
+   These values were checked with the data-viz palette validator against this
+   app's actual white chart surface (#ffffff), not a generic off-white:
+     • single-series blue  → all checks pass
+     • ordinal funnel ramp → all checks pass (monotone L, gaps ≥ 0.06, one hue)
+   ========================================================================== */
+
+:root {
+  /* Single-series mark colour (revenue bars, utilisation bars). */
+  --viz-series-1: #2a78d6;
+  --viz-series-1-hover: #1c5cab;
+
+  /* Ordinal ramp for the sales funnel: light → dark follows stage progression.
+     Steps 250 / 350 / 450 / 550 / 650 of the blue scale — evenly spaced so each
+     step is visibly distinct. */
+  --viz-ordinal-1: #86b6ef;
+  --viz-ordinal-2: #5598e7;
+  --viz-ordinal-3: #2a78d6;
+  --viz-ordinal-4: #1c5cab;
+  --viz-ordinal-5: #104281;
+
+  /* Chart chrome — recessive by design so the data marks dominate. */
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-label: #898781;
+}
+
+/* --- Chart frame ------------------------------------------------------------- */
+
+.chart {
+  position: relative;
+}
+
+/* Plot area + the y-axis tick column beside it. */
+.chart__plot {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: var(--space-2);
+}
+
+.chart__yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--viz-label);
+  padding-bottom: 20px; /* leaves room for the x-axis labels below the bars */
+}
+
+/* Horizontal gridlines are painted as a repeating background, so they stay
+   perfectly aligned with the y-axis ticks at any container height. */
+.chart__bars {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px; /* the 2px surface gap between adjacent bars */
+  height: 200px;
+  border-bottom: 1px solid var(--viz-axis);
+  background-image: repeating-linear-gradient(
+    to top,
+    transparent 0,
+    transparent calc(25% - 1px),
+    var(--viz-grid) calc(25% - 1px),
+    var(--viz-grid) 25%
+  );
+}
+
+.chart__bar-slot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  cursor: pointer;
+}
+
+.chart__bar {
+  /* 4px rounded data-end, square where it meets the baseline. */
+  border-radius: 4px 4px 0 0;
+  background: var(--viz-series-1);
+  transition: background 120ms ease;
+  min-height: 2px;
+}
+.chart__bar-slot:hover .chart__bar {
+  background: var(--viz-series-1-hover);
+}
+
+.chart__xaxis {
+  display: flex;
+  gap: 2px;
+  margin-top: var(--space-2);
+}
+.chart__xlabel {
+  flex: 1;
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--viz-label);
+}
+
+/* --- Tooltip ------------------------------------------------------------------ */
+
+.chart__tooltip {
+  position: absolute;
+  z-index: 10;
+  transform: translate(-50%, -100%);
+  background: var(--ink-900);
+  color: var(--white);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-md);
+}
+.chart__tooltip-label {
+  color: var(--ink-400);
+  font-size: var(--text-xs);
+}
+.chart__tooltip-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Funnel (horizontal ordinal bars) ------------------------------------------ */
+
+.funnel__row {
+  display: grid;
+  grid-template-columns: 110px 1fr 64px;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+}
+.funnel__label {
+  font-size: var(--text-sm);
+  font-weight: 550;
+  text-align: right;
+  color: var(--text-secondary);
+}
+.funnel__track {
+  height: 22px;
+  background: var(--bg-raised);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.funnel__fill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width 400ms ease;
+}
+.funnel__value {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  /* Text keeps an ink token — never the series colour. */
+  color: var(--text-primary);
+}
+.funnel__rate {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}

@@ -1,0 +1,12 @@
+/* Global stylesheet entry point — imported once in src/main.tsx.
+   Order matters: tokens must load before anything that consumes them. */
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/layout.css';
+@import './styles/components.css';
+@import './styles/marketing.css';
+/* Last, so its hover and reveal rules win over the component defaults
+   they refine without needing !important anywhere. */
+@import './styles/motion.css';
+@import './styles/estimator.css';
+@import './styles/viz.css';

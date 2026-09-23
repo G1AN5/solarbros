@@ -1,0 +1,1220 @@
+/* ============================================================================
+   COMPONENT STYLES
+   Each block here backs one component in src/components/ui/.
+   ========================================================================== */
+
+/* --- Button ---------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  /* 40px tall at the default size. Below about 44px a target gets hard to hit
+     on a phone, and the field portal is used one-handed on a roof — the large
+     variant covers that, and this is the floor for everything else. */
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* A press that moves gives the click somewhere to land. One pixel — enough to
+   feel, not enough to shift the layout. */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn--primary {
+  background: linear-gradient(180deg, var(--brand-400), var(--brand-500));
+  color: var(--ink-950);
+  box-shadow: var(--shadow-sm);
+}
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--brand-300), var(--brand-400));
+  box-shadow: var(--shadow-brand);
+}
+
+.btn--dark {
+  background: var(--ink-900);
+  color: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+.btn--dark:hover:not(:disabled) {
+  background: var(--ink-800);
+  box-shadow: var(--shadow-md);
+}
+
+.btn--outline {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.btn--outline:hover:not(:disabled) {
+  background: var(--bg-raised);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--bg-raised);
+  color: var(--text-primary);
+}
+
+/* Outline button for DARK surfaces (hero, sidebar, dark CTA sections).
+   `.btn--outline` uses dark ink and disappears on a dark background — use this
+   instead whenever the button sits on --ink-900 or the hero gradient. */
+.btn--light {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+  color: var(--white);
+}
+.btn--light:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.btn--danger {
+  background: var(--danger-solid);
+  color: var(--white);
+}
+
+.btn--sm {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+.btn--lg {
+  min-height: 48px;
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-md);
+}
+.btn--block {
+  width: 100%;
+}
+
+/* --- Card ------------------------------------------------------------------ */
+
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.card--interactive {
+  transition:
+    box-shadow var(--transition-slow),
+    border-color var(--transition-slow),
+    transform var(--transition-slow);
+}
+.card--interactive:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--brand-300);
+  transform: translateY(-3px);
+}
+.card--accent {
+  border-color: var(--brand-400);
+  box-shadow:
+    0 0 0 3px var(--brand-50),
+    var(--shadow);
+}
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+.card__title {
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+.card__body {
+  padding: var(--space-5);
+}
+.card__footer {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+  background: var(--bg-page);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* --- Badge / status pill ---------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  /* A hairline of the badge's own colour. On a white card the pale fills alone
+     are very light, and status is something people scan for at a glance. */
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 6%);
+}
+.badge--success {
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+.badge--warning {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+.badge--danger {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+}
+.badge--info {
+  background: var(--info-bg);
+  color: var(--info-fg);
+}
+.badge--neutral {
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+}
+.badge--brand {
+  background: var(--brand-100);
+  color: var(--brand-700);
+}
+
+/* --- Data table ------------------------------------------------------------- */
+
+/* The wrapper scrolls horizontally so wide operational tables never break the
+   page layout on narrow screens. */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-base);
+}
+.table th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+/* Following a wide row across to the status column is the single most common
+   thing anyone does on these screens. */
+.table tbody tr {
+  transition: background var(--transition);
+}
+/* Scanning a wide table means tracking one row across a dozen columns, which
+   is exactly where the eye slips. The hover tint is the cheapest fix there is. */
+.table tbody tr:hover {
+  background: var(--bg-page);
+}
+/* Money and quantities line up on the decimal. Without this, a column of
+   figures in a proportional font is genuinely harder to scan. */
+.table__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Stat tile (KPI) -------------------------------------------------------- */
+
+.stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* The tiles sit in a grid row, so they all take the height of the tallest.
+     Pushing the delta to the bottom means a tile without one does not leave a
+     hole where the others have a line of text — a row of four where one is
+     visibly hollow reads as a rendering fault. */
+  height: 100%;
+  padding: var(--space-5);
+}
+.stat__label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.stat__value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  /* Tabular figures so a column of tiles has its digits in line. Without it,
+     PHP 1,240,000 and PHP 980,000 sit at visibly different widths and the row
+     looks misaligned even though it is not. */
+  font-variant-numeric: tabular-nums;
+  margin-top: var(--space-1);
+  color: var(--text-primary);
+}
+
+/* A hairline of brand along the top edge. Enough to mark these as the summary
+   row without four coloured boxes shouting over the table beneath them. */
+.stat::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand-400), var(--brand-500) 40%, transparent);
+  opacity: 0.8;
+}
+.stat__delta {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+.stat__delta--up {
+  color: var(--success-fg);
+}
+.stat__delta--down {
+  color: var(--danger-fg);
+}
+.stat__delta--flat {
+  color: var(--text-muted);
+}
+
+/* --- Page header ------------------------------------------------------------ */
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-6);
+}
+.page-header__title {
+  font-size: var(--text-2xl);
+}
+.page-header__desc {
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+  max-width: 70ch;
+}
+.breadcrumb {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+.breadcrumb a:hover {
+  color: var(--text-brand);
+}
+
+/* --- Forms ------------------------------------------------------------------ */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.field__label {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.field__hint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.input,
+.select,
+.textarea {
+  width: 100%;
+  /* Matches the button height so a field and its button line up, and clears
+     the 16px threshold below which iOS Safari zooms the whole page on focus —
+     which on a booking form feels like the site broke. */
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+.shell--public .input,
+.shell--public .select,
+.shell--public .textarea {
+  min-height: 46px;
+  font-size: var(--text-md);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-muted);
+}
+.input:hover:not(:focus),
+.select:hover:not(:focus),
+.textarea:hover:not(:focus) {
+  border-color: var(--ink-400);
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: var(--focus-ring);
+}
+/* The browser default red ring fires while someone is still typing. Only show
+   an error once the field has actually been left in a bad state. */
+.input:user-invalid,
+.select:user-invalid,
+.textarea:user-invalid {
+  border-color: var(--danger-solid);
+}
+
+/* A native select still gets the OS arrow; make room for it so long option
+   text does not run underneath. */
+.select {
+  padding-right: var(--space-8);
+}
+.textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+/* --- Timeline (project milestone tracker) ------------------------------------
+   Used by the client Project Tracker and the admin Project detail view.      */
+
+.timeline {
+  position: relative;
+  padding-left: var(--space-8);
+}
+/* The vertical rail behind the milestone dots. */
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--border);
+}
+.timeline__item {
+  position: relative;
+  padding-bottom: var(--space-6);
+}
+.timeline__item:last-child {
+  padding-bottom: 0;
+}
+.timeline__dot {
+  position: absolute;
+  left: calc(-1 * var(--space-8) + 4px);
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  border: 3px solid var(--bg-surface);
+  background: var(--border-strong);
+  box-shadow: 0 0 0 2px var(--border);
+}
+.timeline__item--done .timeline__dot {
+  background: var(--success-solid);
+  box-shadow: 0 0 0 2px var(--success-solid);
+}
+.timeline__item--active .timeline__dot {
+  background: var(--brand-500);
+  box-shadow: 0 0 0 2px var(--brand-500);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--brand-500);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--brand-200);
+  }
+}
+.timeline__title {
+  font-weight: 600;
+}
+.timeline__meta {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* --- Kanban pipeline (CRM leads) --------------------------------------------- */
+
+.kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
+  gap: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-4);
+}
+.kanban__col {
+  background: var(--bg-raised);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  min-height: 200px;
+  /* A transparent border rather than none, so gaining one on hover does not
+     shift every card in the column by a pixel. */
+  border: 2px dashed transparent;
+  transition:
+    background-color var(--transition),
+    border-color var(--transition);
+}
+
+/* The column being dragged over. Without this the gesture gives no feedback
+   until the drop lands, and somebody hovering between two columns has no idea
+   which will take the card. */
+.kanban__col.is-drop-target {
+  background: var(--brand-50);
+  border-color: var(--brand-400);
+}
+.kanban__col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+/* The original card while its ghost is being dragged. Faded rather than
+   hidden: removing it collapses the column and everything below jumps, which
+   makes the drop target move out from under the pointer mid-gesture. */
+.kanban__card.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.kanban__card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  transition:
+    opacity var(--transition),
+    box-shadow var(--transition);
+  transition: var(--transition);
+}
+.kanban__card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-400);
+}
+
+/* --- Progress bar ------------------------------------------------------------ */
+
+.progress {
+  height: 8px;
+  background: var(--bg-raised);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.progress__fill {
+  height: 100%;
+  background: var(--brand-500);
+  border-radius: var(--radius-full);
+  transition: width 400ms ease;
+}
+.progress__fill--success {
+  background: var(--success-solid);
+}
+.progress__fill--danger {
+  background: var(--danger-solid);
+}
+
+/* --- Tabs --------------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-5);
+  overflow-x: auto;
+}
+.tabs__tab {
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  font-size: var(--text-base);
+  font-weight: 550;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: var(--transition);
+}
+.tabs__tab:hover {
+  color: var(--text-primary);
+}
+.tabs__tab.is-active {
+  color: var(--text-brand);
+  border-bottom-color: var(--brand-500);
+}
+
+/* --- Empty state --------------------------------------------------------------- */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-12) var(--space-6);
+  color: var(--text-secondary);
+}
+.empty__icon {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+/* --- Checklist (field technician install stages) --------------------------------- */
+
+.checklist__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.checklist__item.is-done {
+  background: var(--success-bg);
+  border-color: var(--success-solid);
+}
+.checklist__box {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  font-size: var(--text-sm);
+  color: transparent;
+}
+.checklist__item.is-done .checklist__box {
+  background: var(--success-solid);
+  border-color: var(--success-solid);
+  color: var(--white);
+}
+
+/* --- Misc text utilities --------------------------------------------------------- */
+
+.muted {
+  color: var(--text-secondary);
+}
+.dim {
+  color: var(--text-muted);
+}
+.small {
+  font-size: var(--text-sm);
+}
+.xs {
+  font-size: var(--text-xs);
+}
+.strong {
+  font-weight: 650;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.center {
+  text-align: center;
+}
+.eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-brand);
+}
+
+/* ============================================================================
+   MODAL
+   ----------------------------------------------------------------------------
+   Styling the native <dialog>. `::backdrop` is a real pseudo-element the
+   browser paints behind an open modal dialog — no overlay div required.
+   ========================================================================== */
+
+.modal {
+  padding: 0;
+  border: none;
+  background: transparent;
+  max-width: min(560px, calc(100vw - var(--space-8)));
+  width: 100%;
+}
+
+.modal::backdrop {
+  background: rgb(15 23 42 / 55%);
+}
+
+.modal__body {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.modal__close {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-base);
+  line-height: 1;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.modal__close:hover {
+  background: var(--ink-100);
+  color: var(--text);
+}
+
+.modal__content {
+  padding: var(--space-5);
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+
+.modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+  background: var(--ink-50);
+}
+
+/* ============================================================================
+   LOADING
+   ----------------------------------------------------------------------------
+   Two problems pull in opposite directions.
+
+   A spinner that appears instantly FLASHES. A lazy chunk on a decent connection
+   arrives in tens of milliseconds, and something that appears and vanishes in
+   that time reads as a glitch, not as progress.
+
+   A page that sits blank for two seconds on a slow connection reads as broken,
+   and the visitor leaves. Philippine mobile data is exactly where this matters.
+
+   So the loader is DELAYED: nothing at all for the first 400ms, then it fades
+   in. Fast loads never show it; slow loads get real, moving reassurance. The
+   delay is in the animation itself — no timers, no extra state, no re-render.
+   ========================================================================== */
+
+@keyframes sb-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sb-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+}
+
+.loader {
+  display: grid;
+  place-items: center;
+  gap: var(--space-4);
+  padding: var(--space-10) var(--space-4);
+  /* The `both` fill mode plus the delay is what keeps it invisible until the
+     wait is long enough to be worth acknowledging. */
+  animation: sb-fade-in 260ms ease both;
+  animation-delay: 400ms;
+}
+.loader--inline {
+  padding: var(--space-6) var(--space-4);
+}
+.loader--page {
+  min-height: 50vh;
+}
+
+/* A ring with one bright quarter. Reads as a sun at a glance, costs one
+   element and no image. */
+.loader__ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--brand-100);
+  border-top-color: var(--brand-500);
+  animation: sb-spin 720ms linear infinite;
+}
+.section--dark .loader__ring,
+.loader--invert .loader__ring {
+  border-color: rgba(255, 255, 255, 0.18);
+  border-top-color: var(--brand-400);
+}
+
+.loader__label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.loader--invert .loader__label {
+  color: var(--ink-300);
+}
+
+/* ----------------------------------------------------------------------------
+   SKELETONS
+   Better than a spinner wherever the SHAPE of what is coming is known: the page
+   does not jump when the content lands, because the space was already the right
+   size. Used for cards and table rows.
+   -------------------------------------------------------------------------- */
+
+@keyframes sb-shimmer {
+  from {
+    background-position: -180% 0;
+  }
+  to {
+    background-position: 180% 0;
+  }
+}
+
+.skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--ink-100) 0%, var(--ink-200) 38%, var(--ink-100) 76%);
+  background-size: 220% 100%;
+  animation: sb-shimmer 1400ms ease-in-out infinite;
+}
+.skeleton--text {
+  height: 0.85em;
+  margin-block: 0.3em;
+}
+.skeleton--title {
+  height: 1.4em;
+  width: 45%;
+  margin-bottom: var(--space-3);
+}
+.skeleton--block {
+  height: 120px;
+  border-radius: var(--radius);
+}
+
+/* ----------------------------------------------------------------------------
+   REDUCED MOTION
+   base.css disables animation globally for anyone who has asked for that, which
+   would leave them with a loader that is invisible for ever — the delay is an
+   animation. Give them a static, visible indicator instead.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .loader {
+    opacity: 1;
+  }
+  .loader__ring {
+    border-top-color: var(--brand-500);
+    animation: none;
+  }
+  .skeleton {
+    background: var(--ink-100);
+    animation: none;
+  }
+}
+
+/* Small amber dot for "working on it" beside a button or a row, where a full
+   loader would be too much. */
+.working-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-500);
+  animation: sb-pulse 900ms ease-in-out infinite;
+}
+
+/* ============================================================================
+   OUTLINE BUTTONS ON DARK SECTIONS
+   ----------------------------------------------------------------------------
+   `.btn--outline` uses dark ink and a dark border, so on a dark section it
+   becomes an almost invisible rectangle — which is exactly what happened to
+   "View the full portfolio" the moment the portfolio section went dark.
+
+   `.btn--light` exists for that case, but relying on every call site to
+   remember it means the bug returns the next time a section changes colour.
+   The section knows it is dark; let it re-style the button.
+   ========================================================================== */
+
+.section--dark .btn--outline,
+.hero .btn--outline {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+  color: var(--white);
+}
+.section--dark .btn--outline:hover:not(:disabled),
+.hero .btn--outline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.65);
+}
+
+.section--dark .btn--ghost,
+.hero .btn--ghost {
+  color: var(--ink-300);
+}
+.section--dark .btn--ghost:hover:not(:disabled),
+.hero .btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white);
+}
+
+/* Links inside dark sections need the same treatment — the default inherits a
+   near-black that vanishes. */
+.section--dark a:not(.btn):not(.pkg__cta) {
+  color: var(--brand-300);
+}
+.section--dark .badge--brand {
+  background: rgba(245, 158, 11, 0.18);
+  color: var(--brand-200);
+}
+.section--dark .card {
+  background: var(--bg-surface);
+}
+.section--dark hr {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ============================================================================
+   RECEIPT
+   ----------------------------------------------------------------------------
+   Readable on screen inside the modal, and correct on paper.
+
+   The print block is the important half: without it, printing captures the
+   whole application — sidebar, navigation, the modal's own chrome — and the
+   customer gets a screenshot of a web page instead of a receipt.
+   ========================================================================== */
+
+.receipt {
+  font-size: var(--text-base);
+  color: var(--ink-900);
+}
+.receipt__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--ink-900);
+}
+.receipt__company {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+.receipt__meta {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.receipt__stamp {
+  text-align: right;
+  flex-shrink: 0;
+}
+.receipt__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.receipt__ref {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+.receipt__to {
+  padding-block: var(--space-4);
+}
+.receipt__name {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.receipt__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-block: var(--space-3);
+}
+.receipt__table td {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.receipt__table tfoot td {
+  border-bottom: 0;
+  border-top: 2px solid var(--ink-900);
+  padding-top: var(--space-3);
+  font-size: var(--text-md);
+}
+.receipt__amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.receipt__note {
+  margin-top: var(--space-5);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ----------------------------------------------------------------------------
+   PRINT
+   Hide the application, show only the receipt, and let it fill the page.
+   `position: static` on the dialog matters — a fixed-position element prints
+   only its first page and silently truncates anything longer.
+   -------------------------------------------------------------------------- */
+
+.receipt__signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin: var(--space-8) 0 var(--space-4);
+}
+
+.receipt__signline {
+  border-bottom: 1px solid var(--ink-400);
+  height: 34px;
+  margin-bottom: var(--space-1);
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  /* Any printable document, not just a receipt: the turnover certificate
+     shares this block rather than duplicating a second print stylesheet. */
+  #printable-receipt,
+  #printable-receipt *,
+  .printable,
+  .printable * {
+    visibility: visible;
+  }
+
+  #printable-receipt,
+  .printable {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    padding: 0;
+    font-size: 12pt;
+    color: #000;
+  }
+
+  .modal,
+  .modal__body {
+    position: static;
+    box-shadow: none;
+    border: 0;
+    max-width: none;
+    background: #fff;
+  }
+  .modal::backdrop {
+    display: none;
+  }
+  .modal__head,
+  .modal__foot {
+    display: none;
+  }
+  .modal__content {
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  @page {
+    margin: 18mm;
+  }
+}
+
+/* ============================================================================
+   TICKET THREAD
+   ----------------------------------------------------------------------------
+   Left-aligned for the customer, right-shaded for staff, and a marked-out
+   variant for an internal note so nobody mistakes one for a reply the customer
+   has read. No avatars and no bubble tails: this is read on a phone on site.
+   ========================================================================== */
+
+.thread__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.thread__msg {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ink-300);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.thread__msg--staff {
+  border-left-color: var(--brand-solid);
+  background: var(--brand-bg, var(--ink-50));
+}
+
+.thread__msg--internal {
+  border-left-color: var(--warning-solid);
+  background: var(--warning-bg);
+}
+
+.thread__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-1);
+}
+
+.thread__tag {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warning-solid);
+  color: #fff;
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.thread__body {
+  margin: 0;
+  font-size: var(--text-sm);
+  /* Keeps the line breaks someone typed, without rendering their HTML. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thread__files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--ink-50);
+}
+
+.thread__compose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* ============================================================================
+   CONSOLE SEARCH
+   ========================================================================== */
+
+.csearch {
+  position: relative;
+}
+
+.csearch__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: min(420px, 80vw);
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 40;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg, 0 12px 32px rgb(0 0 0 / 0.18));
+}
+
+.csearch__hit {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  width: 100%;
+  padding: var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.csearch__hit:last-child {
+  border-bottom: 0;
+}
+
+.csearch__hit:hover,
+.csearch__hit:focus-visible {
+  background: var(--ink-50);
+}
+
+.csearch__kind {
+  flex: 0 0 62px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding-top: 2px;
+}
+
+.csearch__empty {
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
