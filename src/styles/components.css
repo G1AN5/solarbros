@@ -673,6 +673,27 @@
   background: transparent;
   max-width: min(560px, calc(100vw - var(--space-8)));
   width: 100%;
+
+  /* CENTRING. The browser's own stylesheet centres an open modal <dialog> with
+     `inset: 0; margin: auto`. The universal reset at the top of base.css
+     (`* { margin: 0 }`) overrode that margin, so every dialog in the
+     application — 23 of them — opened pinned to the top-left corner of the
+     screen instead of in the middle of it.
+
+     Restoring `margin: auto` restores both axes at once, because `inset: 0`
+     from the UA stylesheet survived the reset and auto margins distribute the
+     leftover space evenly on all four sides. */
+  margin: auto;
+
+  /* A dialog taller than the window would otherwise run off the bottom with no
+     way to reach its buttons. `.modal__content` already caps and scrolls, so
+     this is only a backstop.
+
+     NOT `display: flex` here, however tempting. Author styles beat the user
+     agent stylesheet whatever the specificity, so any `display` on `.modal`
+     would defeat `dialog:not([open]) { display: none }` and leave every closed
+     dialog on the page permanently visible. */
+  max-height: calc(100vh - var(--space-8));
 }
 
 .modal::backdrop {
@@ -1059,6 +1080,9 @@
     box-shadow: none;
     border: 0;
     max-width: none;
+    /* The on-screen height cap is measured in viewport units, which on paper
+       would clip a receipt at one screenful. */
+    max-height: none;
     background: #fff;
   }
   .modal::backdrop {

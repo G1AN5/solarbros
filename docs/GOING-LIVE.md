@@ -20,7 +20,6 @@ name. One file now serves both the browser tab and the logo in the app header.
 ```
 public/
   solarbroslogo.jpg     <- put it here
-  icons.svg
   robots.txt
 ```
 
@@ -91,6 +90,38 @@ Work down the categories. The ones that matter before anybody uses the system:
 Read **`docs/AUTH-SETUP.md`** first and do the dashboard configuration in it —
 email confirmation, the reset-code template and real SMTP. The application
 assumes all three.
+
+### Point the auth emails at the deployed site, not at your laptop
+
+Do this **before** anybody registers on the live site, or every confirmation and
+password-reset link will be broken.
+
+The application builds each link from `window.location.origin`, so a visitor who
+registers at `https://solarbros.vercel.app` gets a link back to that address. The
+reason your test link said `http://localhost:5173` is simply that you registered
+from a dev server, and `localhost` on your phone means _the phone itself_ — which
+is running nothing. On your laptop the same link worked because there, localhost
+really was the dev server. **This resolves itself on deployment.**
+
+What does _not_ resolve itself is Supabase's allowlist. Supabase only honours the
+address the app asks for if that address is on the list; anything else silently
+falls back to the **Site URL**. So an unconfigured project sends everybody to
+whatever that field happens to say — often still `http://localhost:3000`.
+
+In the Supabase dashboard, **Authentication → URL Configuration**:
+
+| Field         | Set it to                                                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Site URL      | `https://your-production-domain` — the fallback, and where a link with no explicit target goes                              |
+| Redirect URLs | Add `https://your-production-domain/**`. Keep `http://localhost:5173/**` as a second entry so local development still works |
+
+The `/**` wildcard matters: the app sends people to `/login`, `/staff/login` and
+`/reset-password` depending on who they are, and a bare origin with no wildcard
+matches none of those.
+
+Afterwards, register one throwaway account on the live site and open the email on
+a phone that is **not** on your home network. That is the only way to be sure the
+link does not depend on something local.
 
 ### The first administrator
 
