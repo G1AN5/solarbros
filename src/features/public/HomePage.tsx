@@ -481,7 +481,11 @@ export function HomePage() {
               </span>
             ))}
           </div>
-          <p className="small muted" style={{ marginTop: 'var(--space-4)' }}>
+          {/* `center` is needed even though the section already centres its
+              text: the paragraph is capped at 72ch for readability, and a
+              capped box with no auto margin sits flush left however its text
+              is aligned. */}
+          <p className="small muted center" style={{ marginTop: 'var(--space-4)' }}>
             Outside these areas?{' '}
             <Link to="/contact" style={{ color: 'var(--text-brand)', fontWeight: 600 }}>
               Get in touch

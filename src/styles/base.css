@@ -166,12 +166,19 @@ hr {
   max-width: 72ch;
 }
 
-/* A paragraph capped at 72ch inside a wider section keeps its box pinned to the
-   left, so `.center` centred the TEXT inside a box that was itself flush left —
-   reading as "centred, but off to one side". Centring the box too is what the
-   class was always meant to do. Applies wherever a measure-limited paragraph is
-   asked to centre, not just the one place it was noticed. */
-.shell--public p.center {
+/* A paragraph capped at 72ch inside a wider section keeps its box pinned to
+   the left, so `.center` centred the TEXT inside a box that was itself flush
+   left — reading as "centred, but off to one side".
+
+   `.center` now centres the box as well, which is what it always looked like
+   it did. Any measure-limited element asked to centre gets both, so nobody
+   else has to know the cap exists. */
+.shell--public .center,
+/* ...and paragraphs INSIDE a centred block. `<div class="center"><p>` is the
+   commoner shape than `<p class="center">`, and the paragraph is the element
+   carrying the 72ch cap — so without this the wrapper centres correctly and
+   the text inside it still hangs off to the left. */
+.shell--public .center > p {
   margin-inline: auto;
 }
 

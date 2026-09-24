@@ -741,6 +741,11 @@
 }
 
 .marquee__eyebrow {
+  /* A paragraph, so `.shell--public p { max-width: 72ch }` caps it — and a
+     capped box with no auto margin sits flush left, which centres the TEXT
+     inside a box that is itself off to one side. The same trap as the
+     "Bank financing" line on How It Works. */
+  margin-inline: auto;
   text-align: center;
   font-size: var(--text-xs);
   font-weight: 700;
@@ -818,12 +823,23 @@ a.marquee__item:hover .marquee__logo {
 }
 
 .marquee__name {
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-muted);
+  letter-spacing: -0.02em;
+  /* Was --text-muted, which is a caption grey. At this size on white it read
+     as disabled text rather than as a brand, and the whole band looked empty.
+     These are the names of the equipment the company stakes its warranty on;
+     they should be legible. */
+  color: var(--ink-700, #334155);
   white-space: nowrap;
-  transition: color var(--transition);
+  transition:
+    color var(--transition),
+    opacity var(--transition);
+  opacity: 0.85;
+}
+
+a.marquee__item:hover .marquee__name {
+  opacity: 1;
 }
 
 a.marquee__item:hover .marquee__name {
@@ -940,7 +956,10 @@ a.marquee__item:hover .marquee__name {
    A bare URL printed as text told nobody anything and invited no click.
    ========================================================================== */
 
-.social {
+/* `.pub-footer a` sets `display: block`, and at (0,1,1) it outranks a lone
+   class — so the icon and the label stacked onto two lines. Scoped to the
+   footer to win, rather than reaching for !important. */
+.pub-footer .social {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
@@ -957,13 +976,13 @@ a.marquee__item:hover .marquee__name {
     transform var(--transition);
 }
 
-.social svg {
+.pub-footer .social svg {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
 }
 
-.social:hover {
+.pub-footer .social:hover {
   background: #1877f2;
   border-color: #1877f2;
   color: var(--white);
@@ -998,19 +1017,17 @@ a.marquee__item:hover .marquee__name {
     radial-gradient(50% 70% at 90% 0%, rgba(251, 191, 36, 0.07), transparent 60%);
 }
 
-/* The dark sections get a faint grid — the same motif as the hero, so the page
-   reads as one piece rather than as separate templates. */
-.section--dark {
-  position: relative;
-  background-image:
-    radial-gradient(70% 100% at 50% 0%, rgba(245, 158, 11, 0.12), transparent 60%),
-    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    64px 64px,
-    64px 64px;
-}
+/* NOTHING IS ADDED FOR `.section--dark` HERE, DELIBERATELY.
+
+   This block used to set `background-image` on it. Further up the file
+   `.section--dark` already sets the full `background` shorthand — a warm
+   radial over `linear-gradient(170deg, var(--ink-950) ...)` — and that dark
+   gradient IS a background-image. Setting the property again later replaced
+   it, leaving the section with no background at all, so the final call to
+   action rendered white text on white.
+
+   It was also redundant: `.section--dark::before` already lays the hero's grid
+   over these sections. */
 
 /* ============================================================================
    CARDS THAT RESPOND
