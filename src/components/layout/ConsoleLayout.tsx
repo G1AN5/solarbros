@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { Logo } from './Logo'
@@ -45,6 +45,40 @@ export function ConsoleLayout({ nav, portalName }: ConsoleLayoutProps) {
      handful of tickets; a search box there would be answering a question
      nobody has. */
   const navigate = useNavigate()
+
+  /* THE SIDEBAR WAS THE ONLY NAVIGATION, AND IT WAS HIDDEN ON PHONES.
+     `.sidebar { display: none }` below 1024px, with nothing put in its place —
+     so a customer signing in on a phone reached their dashboard and could not
+     leave it. Sign out lived in the same rail, so they could not do that
+     either.
+
+     A drawer rather than a second set of links: one nav, one source of truth,
+     no chance of the phone menu and the desktop rail drifting apart. */
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  /* Closed on the link itself rather than by watching the location. Both close
+     the drawer after a navigation, but setting state from a location effect
+     fires a second render every time the route changes — for every page, not
+     just the ones opened from the drawer. Doing it where the click happens is
+     one render, and it also closes when somebody taps the page they are
+     already on, which a location watcher would miss. */
+
+  // Escape closes it, as it would any other overlay.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    /* Stop the page behind scrolling under the drawer. Removed on close, so
+       the class can never be left behind on a page that has no drawer. */
+    document.body.classList.add('has-drawer')
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.classList.remove('has-drawer')
+    }
+  }, [menuOpen])
+
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const searchable = portalName !== 'Client Portal'
@@ -68,7 +102,14 @@ export function ConsoleLayout({ nav, portalName }: ConsoleLayoutProps) {
 
   return (
     <div className="shell--console">
-      <aside className="sidebar">
+      {/* Sits under the drawer and above everything else, so a tap anywhere
+          outside closes it. `aria-hidden` because the drawer's own Close
+          button is the accessible route; this is a convenience for pointers. */}
+      {menuOpen && (
+        <div className="drawer-scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+      )}
+
+      <aside className={`sidebar${menuOpen ? ' is-open' : ''}`} id="console-nav">
         <div className="sidebar__brand">
           <Logo inverse compact />
           <div>
@@ -80,6 +121,18 @@ export function ConsoleLayout({ nav, portalName }: ConsoleLayoutProps) {
             </div>
           </div>
         </div>
+
+        {/* Only rendered on small screens, where the drawer is the only way
+            the rail appears. On a desktop the rail is always visible and a
+            close button would be meaningless. */}
+        <button
+          type="button"
+          className="sidebar__close"
+          onClick={() => setMenuOpen(false)}
+          aria-label="Close menu"
+        >
+          ✕
+        </button>
 
         <nav className="sidebar__nav">
           {visibleGroups.map((group) => (
@@ -94,6 +147,7 @@ export function ConsoleLayout({ nav, portalName }: ConsoleLayoutProps) {
                   end={item.to === '/admin' || item.to === '/portal'}
                   className={({ isActive }) => `sidebar__link${isActive ? ' is-active' : ''}`}
                   title={item.description}
+                  onClick={() => setMenuOpen(false)}
                 >
                   <span className="sidebar__icon" aria-hidden>
                     {item.icon}
@@ -126,6 +180,18 @@ export function ConsoleLayout({ nav, portalName }: ConsoleLayoutProps) {
       <div className="console-main">
         <header className="topbar">
           <div className="row">
+            {/* Shown only below the breakpoint where the rail disappears. */}
+            <button
+              type="button"
+              className="topbar__menu"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="Menu"
+              aria-expanded={menuOpen}
+              aria-controls="console-nav"
+            >
+              ☰
+            </button>
+
             {searchable && (
               <div className="csearch">
                 <input

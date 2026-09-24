@@ -426,12 +426,107 @@
   flex: 1;
 }
 
+/* The hamburger and the drawer's close button exist only below the breakpoint.
+   On a desktop the rail is always on screen, so both would be meaningless. */
+.topbar__menu,
+.sidebar__close {
+  display: none;
+}
+
 @media (max-width: 1024px) {
+  /* ==========================================================================
+     THE RAIL BECOMES A DRAWER
+     --------------------------------------------------------------------------
+     This block used to be `.sidebar { display: none }` and nothing else. The
+     sidebar was the ONLY navigation in either console, and sign out lived in
+     its footer — so on a phone a customer reached their dashboard and could
+     neither go anywhere else nor sign out.
+
+     Sliding the same element off-canvas keeps one set of links for both
+     layouts. A separate mobile menu would be a second list to forget to
+     update.
+     ========================================================================== */
   .shell--console {
     grid-template-columns: 1fr;
   }
+
   .sidebar {
-    display: none;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 60;
+    width: min(var(--sidebar-w), 82vw);
+    height: 100dvh;
+    /* Off-canvas rather than `display: none`, so the links stay in the
+       document and the panel can animate. */
+    transform: translateX(-100%);
+    transition: transform var(--transition);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  /* Someone who prefers reduced motion gets the panel with no slide, not a
+     slower slide. */
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar {
+      transition: none;
+    }
+  }
+
+  .drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgb(15 23 42 / 55%);
+  }
+
+  /* Stops the page underneath scrolling while the drawer is over it. */
+  body.has-drawer {
+    overflow: hidden;
+  }
+
+  .topbar__menu,
+  .sidebar__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    cursor: pointer;
+    /* 44px is the smallest target most people can hit reliably with a thumb.
+       Anything less and this becomes the most-missed control in the app. */
+    min-width: 44px;
+    min-height: 44px;
+    font-size: var(--text-lg);
+    line-height: 1;
+  }
+
+  .sidebar__close {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    background: transparent;
+    border-color: var(--ink-800);
+    color: var(--ink-300);
+  }
+
+  /* The brand block runs to the close button, not under it. */
+  .sidebar__brand {
+    padding-right: calc(44px + var(--space-5));
+  }
+
+  /* The page gutter is tighter on a phone: 24px each side of a 360px screen
+     spends a seventh of the width on nothing. */
+  .console-content {
+    padding: var(--space-4);
+  }
+
+  .topbar {
+    padding-inline: var(--space-4);
   }
 }
 

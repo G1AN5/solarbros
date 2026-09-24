@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
@@ -261,7 +261,47 @@ export async function getPrivateFileUrl(
    SITE PHOTOS — from the field portal
    ========================================================================== */
 
+/* ============================================================================
+   WHICH REQUIRED PHOTOS HAVE ACTUALLY BEEN TAKEN
+   ----------------------------------------------------------------------------
+   The field portal listed eight required photographs and marked the first three
+   "Captured" — from `index < 3`, a literal. It said the same three on an empty
+   database, on every job, forever.
+
+   That is worse than showing nothing. The list exists so a technician can see
+   what is still outstanding before leaving site, and a checklist that lies
+   about what is done is how somebody drives away from a job missing the one
+   photograph an engineer needed.
+   ========================================================================== */
+
+export const sitePhotoKeys = {
+  forProject: (projectId: string) => ['site-photos', projectId] as const,
+}
+
+export function useProjectPhotoCategories(projectId: string | undefined) {
+  return useQuery({
+    queryKey: sitePhotoKeys.forProject(projectId ?? 'none'),
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<string[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+
+      const { data, error } = await supabase
+        .from('site_photos')
+        .select('photo_category')
+        .eq('project_id', projectId!)
+        .not('photo_category', 'is', null)
+
+      if (error) throw error
+      return Array.from(
+        new Set((data ?? []).map((row) => String(row.photo_category)).filter(Boolean)),
+      )
+    },
+  })
+}
+
 export function useUploadSitePhoto() {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: async (input: {
       file: File
@@ -300,6 +340,11 @@ export function useUploadSitePhoto() {
       }
 
       return path
+    },
+    /* Without this the checklist keeps saying "Pending" for a photograph the
+       technician has just taken, which reads as the upload having failed. */
+    onSuccess: (_path, input) => {
+      void queryClient.invalidateQueries({ queryKey: sitePhotoKeys.forProject(input.projectId) })
     },
   })
 }

@@ -7,7 +7,7 @@ import { FormError } from '@/components/ui/FormError'
 import { Tabs } from '@/components/ui/Tabs'
 import { useLogMaterials, useMyJobs, useProjectSerials, useScanSerial } from '@/lib/queries/field'
 import { useStock } from '@/lib/queries/inventory-finance'
-import { useUploadSitePhoto } from '@/lib/queries/storage'
+import { useProjectPhotoCategories, useUploadSitePhoto } from '@/lib/queries/storage'
 
 /* ============================================================================
    FieldLoggingPage — Media & Hardware Logging.
@@ -76,15 +76,32 @@ export function FieldLoggingPage() {
      invented serials and count them "2 of 14" forever. */
   const serials = useProjectSerials(activeJob?.projectId).data ?? []
 
+  /* WHICH of the eight required photographs this capture is. The upload has
+     always accepted a category and the page never sent one, so every photo was
+     filed with `photo_category` null and the checklist below could not have
+     been real even in principle. */
+  const [photoCategory, setPhotoCategory] = useState(PHOTO_CATEGORIES[0])
+
+  /* WHAT the serial belongs to. Every asset was filed as the literal string
+     "Scanned on site", so the admin asset registry listed a column of identical
+     product names and the customer's warranty page could not tell them whether
+     a serial was their inverter or a panel. The technician knows what is in
+     their hand; nothing was asking. */
+  const [serialItemId, setSerialItemId] = useState('')
+  const capturedCategories = useProjectPhotoCategories(activeJob?.projectId).data ?? []
+
   function addSerial(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = scanInput.trim()
     if (!trimmed || !activeJob?.projectId) return
 
+    const serialItem = STOCK.find((s) => s.id === serialItemId)
+
     scanSerial.mutate(
       {
         serialNumber: trimmed,
-        productName: 'Scanned on site',
+        productName: serialItem?.name ?? 'Unspecified equipment',
+        stockItemId: serialItem?.id,
         projectId: activeJob.projectId,
         clientId: activeJob.clientId,
       },
@@ -128,13 +145,19 @@ export function FieldLoggingPage() {
           file,
           projectId: activeJob.projectId!,
           appointmentId: activeJob.id,
+          category: photoCategory,
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         })
         setLogged('Photo uploaded with location')
       },
       () => {
-        uploadPhoto.mutate({ file, projectId: activeJob.projectId!, appointmentId: activeJob.id })
+        uploadPhoto.mutate({
+          file,
+          projectId: activeJob.projectId!,
+          appointmentId: activeJob.id,
+          category: photoCategory,
+        })
         setLogged('Photo uploaded (no location available)')
       },
       { timeout: 5000 },
@@ -150,11 +173,19 @@ export function FieldLoggingPage() {
       </div>
 
       {jobsWithProject.length === 0 ? (
-        <Card>
+        /* EVERY CONTROL BELOW IS DISABLED IN THIS STATE, and previously
+           nothing said so. A photo, a serial and a material line all have to
+           attach to a project, so with no job assigned the buttons do nothing
+           when tapped — which reads as the camera being broken rather than as
+           there being no job. */
+        <Card style={{ borderColor: 'var(--warning-solid)' }}>
           <CardBody>
-            <p className="small muted">
-              Nothing to log against — you have no job with a project assigned today. Open a job
-              from Today first.
+            <p className="small strong">No job assigned to you today</p>
+            <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
+              Photos, serial numbers and materials are all recorded against a specific installation,
+              so there is nothing to attach them to yet. The buttons below stay disabled until a job
+              with a project is scheduled for you — ask the dispatcher to assign one, then pull to
+              refresh.
             </p>
           </CardBody>
         </Card>
@@ -220,10 +251,33 @@ export function FieldLoggingPage() {
                 onChange={handlePhoto}
                 style={{ display: 'none' }}
               />
+              {/* Chosen BEFORE the camera opens, because afterwards the
+                   technician is holding a phone in one hand on a roof and the
+                   answer is already known. */}
+              <div className="field">
+                <label className="field__label" htmlFor="photoCategory">
+                  What is this a photo of?
+                </label>
+                <select
+                  id="photoCategory"
+                  className="select"
+                  value={photoCategory}
+                  onChange={(e) => setPhotoCategory(e.target.value)}
+                >
+                  {PHOTO_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                      {capturedCategories.includes(category) ? ' ✓' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <Button
                 variant="primary"
                 block
                 size="lg"
+                style={{ marginTop: 'var(--space-3)' }}
                 disabled={!activeJob || uploadPhoto.isPending}
                 onClick={() => photoInput.current?.click()}
               >
@@ -241,9 +295,11 @@ export function FieldLoggingPage() {
                 Required photos
               </h3>
               <div className="stack stack--sm">
-                {PHOTO_CATEGORIES.map((category, index) => {
-                  // First three are stand-ins for "already captured".
-                  const captured = index < 3
+                {PHOTO_CATEGORIES.map((category) => {
+                  /* Read from the photographs actually on this project. It was
+                     `index < 3` — the same three categories reported captured
+                     on every job, on an empty database, forever. */
+                  const captured = capturedCategories.includes(category)
                   return (
                     <div key={category} className="row row--between">
                       <span className="small">{category}</span>
@@ -257,8 +313,8 @@ export function FieldLoggingPage() {
                 })}
               </div>
               <p className="xs dim" style={{ marginTop: 'var(--space-3)' }}>
-                All eight are required before the job can be marked complete — they form the
-                engineering inspection record.
+                {capturedCategories.length} of {PHOTO_CATEGORIES.length} taken. All are required
+                before the job can be marked complete — they form the engineering inspection record.
               </p>
             </CardBody>
           </Card>
@@ -270,23 +326,35 @@ export function FieldLoggingPage() {
         <div className="stack">
           <Card>
             <CardBody>
-              {/* A real barcode scanner needs camera access and a decoding
-                  library; typing the serial is the fallback that always works
-                  and is what the form below is for. */}
-              <Button
-                variant="primary"
-                block
-                size="lg"
-                disabled
-                title="Barcode scanning needs a camera permission and a decoder — type it below"
-              >
-                📸 Scan barcode (coming soon)
-              </Button>
+              {/* Barcode scanning was a permanently disabled button labelled
+                   "coming soon" — the largest control on the panel, doing
+                   nothing. Typing a serial is not a fallback here, it is the
+                   method: a phone camera decoding a scuffed label on a panel in
+                   direct sunlight fails often enough that people give up on it,
+                   and the keyboard always works. */}
+              <form onSubmit={addSerial}>
+                <div className="field">
+                  <label className="field__label" htmlFor="serialItem">
+                    Which piece of equipment?
+                  </label>
+                  <select
+                    id="serialItem"
+                    className="select"
+                    value={serialItemId}
+                    onChange={(e) => setSerialItemId(e.target.value)}
+                  >
+                    <option value="">Choose from the catalogue…</option>
+                    {STOCK.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <form onSubmit={addSerial} style={{ marginTop: 'var(--space-3)' }}>
                 <div className="field">
                   <label className="field__label" htmlFor="serial">
-                    Or type it manually
+                    Serial number
                   </label>
                   <input
                     id="serial"
