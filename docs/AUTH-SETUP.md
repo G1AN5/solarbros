@@ -27,15 +27,22 @@ That also means **a customer can never become staff**. They have no pending
 registration to approve, so there is nothing to approve.
 
 > To change somebody's role later — a technician promoted to project engineer —
-> do it in the SQL editor, deliberately, in one transaction:
+> do it in the SQL editor, with one statement:
 >
 > ```sql
-> select set_config('solarbros.role_change_approved', 'yes', true);
-> update public.profiles set role = 'project_engineer' where email = '…';
+> select public.grant_staff_role('them@company.com', 'project_engineer');
+> select public.grant_admin('them@company.com');          -- administrators
 > ```
 >
-> Both statements together, in one run. The setting lasts for the transaction
-> only, which is the point of it.
+> Both are revoked from `anon`, `authenticated` and `service_role`, so neither
+> can be reached from a browser session however the caller is signed in. Each
+> writes a `critical` audit row.
+>
+> These also let you **set the team up without waiting on email**. Create each
+> account under Authentication → Users with _Auto Confirm User_ ticked — that
+> sends no message at all — then grant the role here. Useful because the
+> built-in sender allows only about two emails an hour, which is not enough to
+> register five people in one sitting.
 
 ---
 
