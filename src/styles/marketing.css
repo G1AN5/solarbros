@@ -1034,19 +1034,31 @@ a.marquee__item:hover .marquee__name {
    A card that does nothing under the pointer reads as a picture of a card.
    ========================================================================== */
 
-.pkg,
+/* `.pkg` is NOT in this list, deliberately. It renders inside a
+   `<Card interactive>`, so lifting both meant the card rose 4px and the panel
+   inside it rose another 4px — a doubled, slightly lagging jump that looked
+   like a rendering fault. The wrapper does the lifting. */
 .portfolio-item,
 .section .card--interactive {
   transition:
-    transform var(--transition),
+    translate var(--transition),
     box-shadow var(--transition),
     border-color var(--transition);
 }
 
-.pkg:hover,
+/* `translate`, NOT `transform`.
+
+   `.pkg--featured` already carries `transform: scale(1.03)` above 900px, so a
+   hover rule setting `transform: translateY(...)` REPLACED that scale — the
+   recommended card shrank and jumped the moment the pointer touched it, and
+   the shrink also changed its width, nudging its neighbours.
+
+   The individual `translate` property composes with an existing `transform`
+   instead of overwriting it, so the featured card keeps its scale and lifts
+   like the rest. */
 .portfolio-item:hover,
 .section .card--interactive:hover {
-  transform: translateY(-4px);
+  translate: 0 -4px;
   box-shadow: var(--shadow-lg);
   border-color: var(--brand-300, var(--brand-400));
 }
@@ -1111,10 +1123,38 @@ a.marquee__item:hover .marquee__name {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pkg:hover,
   .portfolio-item:hover,
-  .section .card--interactive:hover,
+  .section .card--interactive:hover {
+    /* `translate`, to match the rule above. Setting `transform: none` here
+       would also cancel the featured card's scale. */
+    translate: none;
+  }
   .shell--public .btn--primary:hover:not(:disabled) {
     transform: none;
   }
+}
+
+/* ============================================================================
+   PACKAGE CARD ALIGNMENT
+   ----------------------------------------------------------------------------
+   The descriptions are written by whoever maintains the catalogue, so one is a
+   single line and the next wraps to two. Everything below then sat a line
+   lower on that card, and a row of price tags at two different heights reads
+   as broken rather than as varied.
+
+   Reserving two lines levels them without capping what can be written: a
+   longer description still grows the card, it just does so for every card in
+   the row, because grid items stretch to the tallest.
+   ========================================================================== */
+
+.pkg__intro p {
+  /* Two lines of the small type, so one-liners hold the same space. */
+  min-height: calc(2 * 1.5 * var(--text-sm, 0.875rem));
+}
+
+/* Grid items already stretch; this makes the panel inside the card fill that
+   stretched height so `margin-top: auto` on the button actually reaches the
+   bottom of the tallest card in the row. */
+.grid > .card > .pkg {
+  height: 100%;
 }

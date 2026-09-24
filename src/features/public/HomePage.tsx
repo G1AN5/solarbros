@@ -260,7 +260,11 @@ export function HomePage() {
             {PACKAGES.filter((p) => p.segment === 'residential').map((pkg) => (
               <Card key={pkg.id} accent={pkg.featured} interactive>
                 <div className={`pkg${pkg.featured ? ' pkg--featured' : ''}`}>
-                  <div>
+                  {/* Named so the one-line and two-line descriptions can be
+                      levelled. Without it, "Large households, or a home with a
+                      small business attached." wraps to two lines and shoves
+                      that card's price a row lower than its neighbour's. */}
+                  <div className="pkg__intro">
                     <h3>{pkg.name}</h3>
                     <p className="small muted">{pkg.idealFor}</p>
                   </div>
