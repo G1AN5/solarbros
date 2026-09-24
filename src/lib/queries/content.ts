@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -73,7 +74,7 @@ export function usePortfolio(publishedOnly = true) {
       if (publishedOnly) query = query.eq('published', true)
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -136,7 +137,7 @@ export function useSavePortfolioItem() {
             'You cannot publish a project without confirming the customer agreed to it being shown.',
           )
         }
-        throw error
+        throw readableDbError(error)
       }
     },
     onSuccess: () => {
@@ -151,7 +152,7 @@ export function useDeletePortfolioItem() {
     mutationFn: async (id: string) => {
       if (!supabase) throw new Error('Not connected to the backend.')
       const { error } = await supabase.from('portfolio_items').delete().eq('id', id)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['content', 'portfolio'] })
@@ -191,7 +192,7 @@ export function useBlogPosts(publishedOnly = true) {
       if (publishedOnly) query = query.eq('published', true)
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -253,7 +254,7 @@ export function useSaveBlogPost() {
         if (error.code === '23505') {
           throw new Error(`The web address "${input.slug}" is already used by another post.`)
         }
-        throw error
+        throw readableDbError(error)
       }
     },
     onSuccess: () => {
@@ -268,7 +269,7 @@ export function useDeleteBlogPost() {
     mutationFn: async (id: string) => {
       if (!supabase) throw new Error('Not connected to the backend.')
       const { error } = await supabase.from('blog_posts').delete().eq('id', id)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['content', 'blog'] })
@@ -302,7 +303,7 @@ export function useReviews(publishedOnly = true) {
       if (publishedOnly) query = query.eq('published', true)
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -343,7 +344,7 @@ export function useModerateReview() {
         })
         .eq('id', input.id)
 
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['content', 'reviews'] })

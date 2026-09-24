@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -63,7 +64,7 @@ export function useInvoicePayments(invoiceId: string | undefined) {
         .eq('verified', true)
         .order('paid_at', { ascending: true })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -117,7 +118,7 @@ export function usePaymentsAwaitingVerification() {
         .eq('verified', false)
         .order('paid_at', { ascending: true })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -160,7 +161,7 @@ export function useVerifyPayment() {
             'You recorded this payment, so somebody else has to verify it. Ask a colleague or an administrator.',
           )
         }
-        throw error
+        throw readableDbError(error)
       }
 
       // PostgREST reports success and updates zero rows when a policy filters
@@ -234,7 +235,7 @@ export function useRefunds() {
         .order('recorded_at', { ascending: false })
         .limit(50)
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       /* One cast, at the boundary, with the shape written out.
          PostgREST types a nested embed as an array-or-object union that does
@@ -298,7 +299,7 @@ export function useRecordRefund() {
         .select('id')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data
     },
     onSuccess: () => {
@@ -324,7 +325,7 @@ export function useConfirmRefund() {
         .eq('id', input.refundId)
         .select('id, status')
 
-      if (error) throw error
+      if (error) throwReadable(error)
       /* A policy-filtered UPDATE returns 200 with zero rows. Reporting that as
          success would tell an accountant money had gone back when it had not. */
       if (!data || data.length === 0) {

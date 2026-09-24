@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth/useAuth'
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -46,7 +47,7 @@ export function useTicketThread(ticketId: string | undefined) {
       if (!ticketId) return []
 
       const { data, error } = await supabase.rpc('ticket_thread', { p_ticket_id: ticketId })
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
         id: String(row.id),
@@ -94,7 +95,7 @@ export function usePostTicketMessage() {
         .select('id')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data
     },
     onSuccess: (_data, variables) => {
@@ -142,7 +143,7 @@ export function useTicketAttachments(ticketId: string | undefined) {
         .eq('ticket_id', ticketId)
         .order('uploaded_at', { ascending: true })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { toAppointment, toProject, toTicket } from './mappers'
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
 import type { Appointment, AppointmentType, Project, Ticket } from '@/types/domain'
@@ -45,7 +46,7 @@ export function useProjects() {
         )
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => {
         const project = toProject(row, row.project_milestones ?? [])
@@ -72,7 +73,7 @@ export function useProject(projectId?: string) {
         .eq('id', projectId!)
         .maybeSingle()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data) return null
 
       const project = toProject(data, data.project_milestones ?? [])
@@ -122,7 +123,7 @@ export function useUpdateMilestone() {
            the gate explaining exactly which precondition is missing. Passing
            them through beats replacing them with something vaguer. */
         if (error.code === '42501') throw new Error(error.message)
-        throw error
+        throw readableDbError(error)
       }
     },
     onSuccess: () => {
@@ -166,7 +167,7 @@ export function useProjectGate(projectId?: string) {
       const { data, error } = await supabase.rpc('project_gate_status', {
         p_project_id: projectId!,
       })
-      if (error) throw error
+      if (error) throwReadable(error)
 
       const gate = data as Record<string, unknown>
       return {
@@ -222,7 +223,7 @@ export function usePermits(projectId?: string) {
       if (projectId) query = query.eq('project_id', projectId)
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -282,7 +283,7 @@ export function useRecordPermitDecision() {
         if (error.message.includes('permits_decision_needs_recorder')) {
           throw new Error('A decision must record who entered it. Please sign in again.')
         }
-        throw error
+        throw readableDbError(error)
       }
     },
     onSuccess: () => {
@@ -301,7 +302,7 @@ export function useDispatchReadiness(projectId?: string) {
       const { data, error } = await supabase.rpc('project_ready_for_dispatch', {
         p_project_id: projectId!,
       })
-      if (error) throw error
+      if (error) throwReadable(error)
       return Boolean(data)
     },
   })
@@ -324,7 +325,7 @@ export function useAllAppointments() {
         )
         .order('scheduled_date', { ascending: true })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) =>
         toAppointment(
@@ -391,7 +392,7 @@ export function useCreateAppointment() {
         .select('id')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data
     },
     onSuccess: () => {
@@ -416,7 +417,7 @@ export function useCrew() {
         .in('role', ['technician', 'project_engineer'])
         .eq('is_active', true)
         .order('full_name')
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map((r) => ({
         id: r.id,
         fullName: r.full_name,
@@ -484,7 +485,7 @@ export function useAllTickets() {
         )
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map((row) => ({
         ...toTicket(row, row.client?.full_name ?? 'Unknown'),
         assignedTo: row.assignee?.full_name ?? undefined,
@@ -519,7 +520,7 @@ export function useUpdateTicket() {
       if (input.resolution) patch.resolution = input.resolution
 
       const { error } = await supabase.from('tickets').update(patch).eq('id', input.id)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ops'] })
@@ -558,7 +559,7 @@ export function useWarrantyRequests() {
         )
         .order('submitted_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -605,7 +606,7 @@ export function useReviewWarrantyRequest() {
         })
         .eq('id', input.id)
 
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ops'] })
@@ -638,7 +639,7 @@ export function useUpdateProjectStatus() {
         .eq('id', input.id)
         .select('id, status')
 
-      if (error) throw error
+      if (error) throwReadable(error)
       /* PostgREST reports a write the policy filtered out as 200 with zero
          rows, not as an error. Treating that as success is how a change that
          never happened gets reported as saved. */
@@ -679,7 +680,7 @@ export function useDocumentsByKind(kind: 'proof_of_sale' | 'turnover_certificate
         .eq('kind', kind)
         .order('uploaded_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       const byProject: Record<string, { id: string; storagePath: string | null }> = {}
       for (const row of data ?? []) {

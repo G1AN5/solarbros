@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 
 import type { ApplianceLoad, EstimatorResult } from '@/lib/solar-estimator'
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -227,7 +228,7 @@ export function useAvailableSlots(date?: string) {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
       const { data, error } = await supabase.rpc('available_slots', { p_date: date! })
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data as SlotAvailability[] | null) ?? []
     },

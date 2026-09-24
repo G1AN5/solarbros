@@ -7,6 +7,7 @@ import {
   type PricingConfig,
   type SystemAssumptions,
 } from '@/lib/solar-estimator'
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types/domain'
 
@@ -61,7 +62,7 @@ export function useSettings() {
         .order('category')
         .order('sort_order')
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         key: row.key,
@@ -125,7 +126,7 @@ export function useUpdateSetting() {
         .eq('key', input.key)
         .select()
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       // RLS refuses by returning zero rows rather than raising, so an empty
       // result means "not permitted" — not "saved successfully".
@@ -168,7 +169,7 @@ export function useUpdateStockThresholds() {
         })
         .eq('id', input.id)
 
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['inv'] })

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth/useAuth'
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -100,7 +101,7 @@ export function useEnquiries() {
         .order('created_at', { ascending: false })
         .limit(200)
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -141,7 +142,7 @@ export function useVisitRequests() {
         .order('scheduled_date', { ascending: true })
         .limit(200)
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -202,7 +203,7 @@ export function useMarkEnquiry() {
         .eq('id', input.leadId)
         .select()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data || data.length === 0) {
         throw new Error('That was not saved — you may not have permission to update this lead.')
       }
@@ -234,7 +235,7 @@ export function useSetVisitStatus() {
         .eq('id', input.id)
         .select()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data || data.length === 0) {
         throw new Error('That visit was not updated — you may not have permission.')
       }
@@ -267,7 +268,7 @@ export function useBlackouts() {
         .gte('blackout_date', new Date().toISOString().slice(0, 10))
         .order('blackout_date')
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map((row) => ({ date: row.blackout_date, reason: row.reason }))
     },
   })
@@ -289,7 +290,7 @@ export function useAddBlackout() {
 
       if (error) {
         if (error.code === '23505') throw new Error('That date is already closed.')
-        throw error
+        throw readableDbError(error)
       }
     },
     onSuccess: () => {
@@ -305,7 +306,7 @@ export function useRemoveBlackout() {
     mutationFn: async (date: string) => {
       if (!supabase) throw new Error(NOT_CONNECTED)
       const { error } = await supabase.from('booking_blackouts').delete().eq('blackout_date', date)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.blackouts })

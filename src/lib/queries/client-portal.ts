@@ -10,6 +10,7 @@ import {
   toTicket,
 } from './mappers'
 import { useAuth } from '@/app/auth/useAuth'
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { TicketCategory, TicketPriority } from '@/types/domain'
 
@@ -76,7 +77,7 @@ export function useMyProject() {
         .limit(1)
         .maybeSingle()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data) return null
 
       const project = toProject(data, data.project_milestones ?? [])
@@ -120,7 +121,7 @@ export function useMyInvoices() {
         .select('*')
         .order('issued_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map((row) => toInvoice(row, user?.fullName ?? ''))
     },
   })
@@ -149,7 +150,7 @@ export function useMyAppointments() {
         )
         .order('scheduled_date', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => {
         const crew = (row.appointment_assignees ?? [])
@@ -188,7 +189,7 @@ export function useRequestAppointment() {
         address: input.address ?? null,
         notes: input.notes ?? null,
       })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: clientKeys.appointments(user?.id) })
@@ -219,7 +220,7 @@ export function useMyDocuments() {
         .select('*')
         .order('uploaded_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map(toDocument)
     },
   })
@@ -239,7 +240,7 @@ export function useMyAssets() {
         .select('*')
         .order('installed_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map(toAsset)
     },
   })
@@ -263,7 +264,7 @@ export function useMyTickets() {
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       /* `profiles_read_self` means a customer cannot join the assignee, so the
          mapper fell through to the raw uuid and the customer's own ticket read
@@ -335,7 +336,7 @@ export function useRaiseTicket() {
         .select('id, reference')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data
     },
     onSuccess: () => {
@@ -367,7 +368,7 @@ export function useMyNotifications() {
         .order('created_at', { ascending: false })
         .limit(50)
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map(toNotification)
     },
   })
@@ -385,7 +386,7 @@ export function useMarkNotificationsRead() {
         .from('notifications')
         .update({ read: true })
         .eq('read', false)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: clientKeys.notifications(user?.id) })
@@ -424,7 +425,7 @@ export function useRequestWarrantyTransfer() {
         transfer_to_phone: input.toPhone?.trim() || null,
         expected_transfer_date: input.transferDate || null,
       })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       // The same row is the approvals queue the office works from.
@@ -487,7 +488,7 @@ export function useNotificationPreferences() {
         .eq('user_id', user!.id)
         .maybeSingle()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       // No row yet means nobody has changed anything, which is the defaults.
       if (!data) return DEFAULT_PREFERENCES
 
@@ -530,7 +531,7 @@ export function useUpdateNotificationPreferences() {
         { onConflict: 'user_id' },
       )
 
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['client', 'notification-prefs'] })
@@ -566,7 +567,7 @@ export function useCancelAppointment() {
         .eq('id', input.appointmentId)
         .select('id')
 
-      if (error) throw error
+      if (error) throwReadable(error)
       // PostgREST reports success and changes nothing when a policy filters the
       // row, so silence would look like it worked.
       if ((data?.length ?? 0) === 0) {
@@ -606,7 +607,7 @@ export function useRequestUpgrade() {
         p_details: input.details ?? undefined,
       })
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data as string
     },
     onSuccess: () => {

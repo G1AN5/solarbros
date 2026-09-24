@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types/domain'
 
@@ -56,7 +57,7 @@ export function useStaff() {
         .neq('role', 'client')
         .order('created_at', { ascending: true })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -105,7 +106,7 @@ export function useSetStaffActive() {
         .from('profiles')
         .update({ is_active: input.isActive })
         .eq('id', input.userId)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.staff })
@@ -143,7 +144,7 @@ export function useAuditLog(severity?: 'info' | 'warning' | 'critical') {
       if (severity) query = query.eq('severity', severity)
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,

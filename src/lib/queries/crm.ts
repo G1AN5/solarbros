@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { Lead, LeadStage, Package } from '@/types/domain'
 
@@ -32,7 +33,7 @@ export function useLeads() {
         .select('*, assigned:profiles!leads_assigned_to_fkey(full_name)')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -78,7 +79,7 @@ export function useUpdateLeadStage() {
         if (error.message.includes('leads_lost_needs_reason')) {
           throw new Error('Please record why this opportunity was lost.')
         }
-        throw error
+        throw readableDbError(error)
       }
     },
     onSuccess: () => {
@@ -110,7 +111,7 @@ export function useCreateLead() {
         estimated_kw: input.estimatedKw ?? null,
         source: input.source ?? 'walk_in',
       })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: crmKeys.leads })
@@ -162,7 +163,7 @@ export function useUpdateLead() {
         .eq('id', input.id)
         .select('id')
 
-      if (error) throw error
+      if (error) throwReadable(error)
       /* A policy-filtered update returns 200 with zero rows, not an error.
          Reporting that as saved would show the rep their correction on screen
          while the database still held the old number. */
@@ -193,7 +194,7 @@ export function usePackages() {
         .eq('is_active', true)
         .order('sort_order', { ascending: true })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,

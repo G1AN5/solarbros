@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -155,7 +156,7 @@ export function useOpenPayrollRun() {
         .select('id')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data
     },
     onSuccess: () => {
@@ -218,7 +219,7 @@ export function useSavePayrollLine() {
 
       const { data, error } = await query
 
-      if (error) throw error
+      if (error) throwReadable(error)
       /* A write the policy filtered out comes back as 200 with zero rows, not
          as an error. Reporting that as saved would tell an accountant a payslip
          was recorded when nothing was written. */
@@ -246,7 +247,7 @@ export function useDeletePayrollLine() {
         .eq('id', input.id)
         .select('id')
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data || data.length === 0) {
         throw new Error('That was refused, or the entry had already gone.')
       }
@@ -279,7 +280,7 @@ export function useSetPayrollStatus() {
         .eq('id', input.runId)
         .select('id, status')
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data || data.length === 0) {
         throw new Error(
           'That was refused. Only an accountant or administrator may approve payroll.',

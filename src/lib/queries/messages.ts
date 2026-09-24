@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth/useAuth'
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types/domain'
 
@@ -63,7 +64,7 @@ export function useMessageableDirectory() {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
       const { data, error } = await supabase.rpc('messageable_people')
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -101,7 +102,7 @@ export function useConversations() {
         .order('last_message_at', { ascending: false })
         .limit(50)
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => {
         const participants = row.conversation_participants ?? []
@@ -163,7 +164,7 @@ export function useThread(conversationId: string | undefined) {
         .eq('conversation_id', conversationId!)
         .order('created_at')
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -189,7 +190,7 @@ export function useStartConversation() {
         p_body: input.body,
       })
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data as string
     },
     onSuccess: (conversationId) => {
@@ -215,7 +216,7 @@ export function useSendMessage() {
         .insert({ conversation_id: input.conversationId, author_id: user.id, body })
         .select()
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       // A policy-filtered insert returns no rows rather than raising.
       if (!data || data.length === 0) {

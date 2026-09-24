@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { useSettings, settingNum, settingText, type Setting } from './settings'
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -151,7 +152,7 @@ export function useFaqs(publishedOnly = true) {
       if (publishedOnly) query = query.eq('published', true)
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,

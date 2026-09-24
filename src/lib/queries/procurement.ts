@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -82,7 +83,7 @@ export function usePermits(projectId?: string) {
       if (projectId) query = query.eq('project_id', projectId)
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -121,7 +122,7 @@ export function useCreatePermit() {
         fee_amount: input.feeAmount ?? null,
         status: 'preparing',
       })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ops', 'permits'] })
@@ -186,7 +187,7 @@ export function useRecordPermitDecision() {
         if (error.message.includes('permits_decision_needs_recorder')) {
           throw new Error('A decision must record who entered it. Please sign in again.')
         }
-        throw error
+        throw readableDbError(error)
       }
       if ((data?.length ?? 0) === 0) {
         throw new Error('That permit could not be updated. You may not have permission.')
@@ -220,7 +221,7 @@ export function useSuppliers() {
         .select('id, name, contact_person, lead_time_days')
         .eq('is_active', true)
         .order('name')
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map((row) => ({
         id: row.id,
         name: row.name,
@@ -285,7 +286,7 @@ export function usePurchaseOrders() {
         .order('created_at', { ascending: false })
         .limit(50)
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -349,7 +350,7 @@ export function useCreatePurchaseOrder() {
         .select('id, po_number')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       const { error: linesError } = await supabase.from('purchase_order_lines').insert(
         input.lines.map((line) => ({
@@ -393,7 +394,7 @@ export function useApprovePurchaseOrder() {
         // The limit message names the amount and the limit, so it is worth
         // showing verbatim rather than replacing with something vaguer.
         if (error.code === '42501') throw new Error(error.message)
-        throw error
+        throw readableDbError(error)
       }
       if ((data?.length ?? 0) === 0) {
         throw new Error('That purchase order could not be updated. You may not have permission.')
@@ -430,7 +431,7 @@ export function useReceivePurchaseOrder() {
         .eq('id', input.id)
         .select('id')
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if ((data?.length ?? 0) === 0) {
         throw new Error('That delivery could not be recorded.')
       }
@@ -471,7 +472,7 @@ export function useMatchPurchaseOrder() {
         })
         .eq('id', input.id)
 
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['inv'] })

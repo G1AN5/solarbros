@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -56,7 +57,7 @@ export function useConsoleSearch(query: string) {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
       const { data, error } = await supabase.rpc('console_search', { p_term: term })
-      if (error) throw error
+      if (error) throwReadable(error)
 
       const DESTINATION: Record<string, (id: string) => string> = {
         project: (id) => `/admin/projects/${id}`,

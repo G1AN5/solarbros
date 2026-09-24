@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types/domain'
 
@@ -52,7 +53,7 @@ export function usePendingStaff() {
         .eq('approval_status', 'pending')
         .order('created_at', { ascending: true })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? [])
         .filter((row) => row.requested_role)
@@ -101,7 +102,7 @@ export function useReviewStaffRegistration() {
         p_role: input.role ?? undefined,
       })
 
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: approvalKeys.pending })

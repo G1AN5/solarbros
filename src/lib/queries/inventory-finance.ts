@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { toAsset, toInvoice } from './mappers'
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { Invoice, SerializedAsset, StockItem } from '@/types/domain'
 
@@ -43,7 +44,7 @@ export function useStock() {
         .order('category')
         .order('name')
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -90,7 +91,7 @@ export function usePostStockMovement() {
         note: input.note ?? null,
         project_id: input.projectId ?? null,
       })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: invKeys.stock })
@@ -121,7 +122,7 @@ export function useAllAssets() {
         )
         .order('installed_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         ...toAsset(row),
@@ -154,7 +155,7 @@ export function useAllInvoices() {
         )
         .order('issued_at', { ascending: false })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         ...toInvoice(row, row.client?.full_name ?? 'Unknown'),
@@ -239,7 +240,7 @@ export function useRecordPayment() {
         // The overpayment guard raises a sentence written for a person; pass it
         // through rather than replacing it with something vaguer.
         if (error.message.includes('outstanding')) throw new Error(error.message)
-        throw error
+        throw readableDbError(error)
       }
 
       return { awaitingVerification: needsSecondPerson }
@@ -293,7 +294,7 @@ export function useFileRma() {
         .select('id, claim_reference')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data
     },
     onSuccess: () => {
@@ -353,7 +354,7 @@ export function useCreateInvoice() {
         .select('id, invoice_number')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data
     },
     onSuccess: () => {
@@ -405,7 +406,7 @@ export function useSendCollectionReminders() {
       }
 
       const { error } = await supabase.from('notifications').insert(rows)
-      if (error) throw error
+      if (error) throwReadable(error)
       return rows.length
     },
     onSuccess: () => {
@@ -429,7 +430,7 @@ export function useOpenRmaCount() {
         // Closed and replacement_received are finished; the rest are open.
         .in('status', ['draft', 'filed', 'under_assessment', 'approved'])
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return count ?? 0
     },
   })
@@ -496,7 +497,7 @@ export function useSaveStockItem() {
         if (error.code === '23505') {
           throw new Error(`The SKU ${row.sku} is already in use by another item.`)
         }
-        throw error
+        throw readableDbError(error)
       }
 
       /* A policy-filtered write returns 200 with zero rows rather than an
@@ -543,7 +544,7 @@ export function useDeleteStockItem() {
             'This item has movements or reservations against it, so it cannot be deleted. Let its stock run down instead.',
           )
         }
-        throw error
+        throw readableDbError(error)
       }
       if (!data || data.length === 0) {
         throw new Error('That was refused, or the item had already gone.')

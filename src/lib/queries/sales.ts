@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { SystemType } from '@/types/domain'
 
@@ -87,7 +88,7 @@ export function useQuotations() {
         .order('created_at', { ascending: false })
         .limit(50)
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -164,6 +165,22 @@ export function useSaveQuotation() {
         return (latest?.version ?? 0) + 1
       }
 
+      /* A QUOTATION WORTH NOTHING IS NOT A QUOTATION.
+
+         The bill of materials prices itself from the stock catalogue. With an
+         empty catalogue every line is zero, so material cost, labour and the
+         total all come out at ₱0 — and it saved happily, looked accepted, and
+         then failed at the contract, where the database requires a value above
+         zero. The reader saw a raw constraint name for a mistake made three
+         screens earlier.
+
+         Refused here, where the cause can still be named. */
+      if (!(input.totalPrice > 0)) {
+        throw new Error(
+          'This quotation comes to ₱0, so there is nothing to quote. The bill of materials prices itself from your stock catalogue — if that is empty, add your panels, inverters and batteries under Inventory first.',
+        )
+      }
+
       async function insertAt(version: number) {
         return supabase!
           .from('quotations')
@@ -201,7 +218,7 @@ export function useSaveQuotation() {
         // The discount authority trigger (migration 0008) raises a sentence
         // written for a person. Pass it through rather than replacing it.
         if (error.message.includes('authority')) throw new Error(error.message)
-        throw error
+        throw readableDbError(error)
       }
       if (!quotation) throw new Error('The quotation could not be saved.')
 
@@ -246,7 +263,7 @@ export function useSendQuotation() {
 
       if (error) {
         if (error.message.includes('authority')) throw new Error(error.message)
-        throw error
+        throw readableDbError(error)
       }
       if ((data?.length ?? 0) === 0) {
         throw new Error('That quotation could not be sent. You may not have permission.')
@@ -275,7 +292,7 @@ export function useSetQuotationStatus() {
         })
         .eq('id', input.id)
 
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: salesKeys.quotations })
@@ -350,7 +367,7 @@ export function useContracts() {
         .from('contracts')
         .select(CONTRACT_COLUMNS)
         .order('created_at', { ascending: false })
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map(mapContract)
     },
   })
@@ -368,7 +385,7 @@ export function useMyContracts(userId?: string) {
         .select(CONTRACT_COLUMNS)
         .eq('client_id', userId!)
         .order('created_at', { ascending: false })
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map(mapContract)
     },
   })
@@ -438,6 +455,15 @@ export function useCreateContract() {
         )
       }
 
+      /* Guarded for the same reason as the stage split just above: a quotation
+         saved before that check existed can still be sitting at ₱0, and the
+         database would refuse it with a constraint name rather than a reason. */
+      if (!(input.contractValue > 0)) {
+        throw new Error(
+          'That quotation is worth ₱0, so there is nothing to put in a contract. Rebuild it once your stock catalogue has the equipment in it, then accept the new version.',
+        )
+      }
+
       const { data, error } = await supabase
         .from('contracts')
         .insert({
@@ -453,7 +479,7 @@ export function useCreateContract() {
         .select('id, reference')
         .single()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return data
     },
     onSuccess: () => {
@@ -498,7 +524,7 @@ export function useSignContract() {
 
       if (error) {
         if (error.code === '42501') throw new Error(error.message)
-        throw error
+        throw readableDbError(error)
       }
       if ((data?.length ?? 0) === 0) {
         throw new Error('That contract could not be signed. Please refresh and try again.')
@@ -547,7 +573,7 @@ export function useCounterSignContract() {
             `Not enough stock to reserve for this contract. Raise a purchase order first. (${error.message})`,
           )
         }
-        throw error
+        throw readableDbError(error)
       }
       if ((data?.length ?? 0) === 0) {
         throw new Error('That contract could not be counter-signed.')

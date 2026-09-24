@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -105,7 +106,7 @@ export function useUploadPublicMedia() {
         if (error.message.includes('mime')) {
           throw new Error('That file type is not allowed. Use JPG, PNG, WebP or SVG.')
         }
-        throw error
+        throw readableDbError(error)
       }
 
       // The path, not a URL. See the note in content.ts about why.
@@ -140,7 +141,7 @@ export function useUploadProjectFile() {
         .from('project-files')
         .upload(path, prepared, { upsert: false })
 
-      if (uploadError) throw uploadError
+      if (uploadError) throwReadable(uploadError)
 
       // Metadata row. Without it the file exists but nothing lists it, and the
       // client-visibility policy has nothing to check against.
@@ -213,7 +214,7 @@ export function useClientUpload() {
         .from('project-files')
         .upload(path, prepared, { upsert: false })
 
-      if (uploadError) throw uploadError
+      if (uploadError) throwReadable(uploadError)
 
       const { error: rowError } = await supabase.rpc('record_client_upload', {
         p_project_id: input.projectId,
@@ -291,7 +292,7 @@ export function useProjectPhotoCategories(projectId: string | undefined) {
         .eq('project_id', projectId!)
         .not('photo_category', 'is', null)
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return Array.from(
         new Set((data ?? []).map((row) => String(row.photo_category)).filter(Boolean)),
       )
@@ -322,7 +323,7 @@ export function useUploadSitePhoto() {
         .from('site-photos')
         .upload(path, compressed, { upsert: false })
 
-      if (uploadError) throw uploadError
+      if (uploadError) throwReadable(uploadError)
 
       const { error: rowError } = await supabase.from('site_photos').insert({
         project_id: input.projectId,

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { SystemType } from '@/types/domain'
 
@@ -56,7 +57,7 @@ export function useAdminPackages() {
         )
         .order('sort_order')
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -105,7 +106,7 @@ export function useSavePackage() {
         : supabase.from('packages').insert(row).select()
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data || data.length === 0) {
         throw new Error('That was not saved — you may not have permission to edit packages.')
       }
@@ -135,7 +136,7 @@ export function useDeletePackage() {
             'This package has been quoted before, so it cannot be deleted without losing that history. Switch it to inactive instead — it disappears from the website and the old quotations stay readable.',
           )
         }
-        throw error
+        throw readableDbError(error)
       }
     },
     onSuccess: () => {
@@ -167,7 +168,7 @@ export function useAdminFaqs() {
         .select(`id, question, answer, category, sort_order, published`)
         .order('sort_order')
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -206,7 +207,7 @@ export function useSaveFaq() {
         : supabase.from('faqs').insert(row).select()
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data || data.length === 0) {
         throw new Error('That was not saved — you may not have permission to edit the FAQ.')
       }
@@ -225,7 +226,7 @@ export function useDeleteFaq() {
     mutationFn: async (id: string) => {
       if (!supabase) throw new Error(NOT_CONNECTED)
       const { error } = await supabase.from('faqs').delete().eq('id', id)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: cmsKeys.faqs })
@@ -260,7 +261,7 @@ export function useLegalDocuments() {
         .select(`slug, title, sections, published, updated_at`)
         .order('slug')
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         slug: row.slug,
@@ -303,7 +304,7 @@ export function useSaveLegalDocument() {
         .eq('slug', input.slug)
         .select()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data || data.length === 0) {
         throw new Error(
           'That was not saved. Legal pages are administrator-only — publishing one is a legal act by the company.',
@@ -343,7 +344,7 @@ export function useBrands(activeOnly = true) {
       if (activeOnly) query = query.eq('is_active', true)
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -380,7 +381,7 @@ export function useSaveBrand() {
         : supabase.from('brands').insert(row).select()
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data || data.length === 0) {
         throw new Error('That was not saved — you may not have permission to edit brands.')
       }
@@ -399,7 +400,7 @@ export function useDeleteBrand() {
     mutationFn: async (id: string) => {
       if (!supabase) throw new Error(NOT_CONNECTED)
       const { error } = await supabase.from('brands').delete().eq('id', id)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: cmsKeys.brands })
@@ -431,7 +432,7 @@ export function useUploadBrandLogo() {
         .from('public-media')
         .upload(path, file, { contentType: file.type })
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       const {
         data: { publicUrl },

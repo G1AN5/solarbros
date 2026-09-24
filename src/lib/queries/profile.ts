@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
+import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 
 /* ============================================================================
@@ -53,7 +54,7 @@ export function useUpdateMyProfile() {
         .eq('id', input.userId)
         .select()
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       /* A policy-filtered write comes back as 200 with zero rows rather than as
          an error, so an empty result means refused, not saved. */
@@ -100,7 +101,7 @@ export function useUploadAvatar() {
         .from('avatars')
         .upload(path, input.file, { upsert: true, contentType: input.file.type })
 
-      if (uploadError) throw uploadError
+      if (uploadError) throwReadable(uploadError)
 
       const {
         data: { publicUrl },
@@ -115,7 +116,7 @@ export function useUploadAvatar() {
         .update({ avatar_url: url })
         .eq('id', input.userId)
 
-      if (rowError) throw rowError
+      if (rowError) throwReadable(rowError)
       return url
     },
     onSuccess: () => {
@@ -143,7 +144,7 @@ export function useRemoveAvatar() {
         .update({ avatar_url: null })
         .eq('id', input.userId)
 
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['profile'] })

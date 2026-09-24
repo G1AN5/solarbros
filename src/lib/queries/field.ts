@@ -10,6 +10,7 @@ import {
   subscribeToQueue,
   type ActionHandlers,
 } from '@/lib/offline-queue'
+import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { Appointment, Project } from '@/types/domain'
 
@@ -80,7 +81,7 @@ export function useOfflineQueue() {
           note: (p.note as string) ?? null,
         })
         .eq('id', p.milestoneId as string)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     serial_scan: async (p) => {
       if (!supabase) return
@@ -94,7 +95,7 @@ export function useOfflineQueue() {
         warranty_years: (p.warrantyYears as number) ?? 10,
         scanned_by: p.userId as string,
       })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     material_usage: async (p) => {
       if (!supabase) return
@@ -103,7 +104,7 @@ export function useOfflineQueue() {
         p_stock_item_id: p.stockItemId as string,
         p_quantity: p.quantity as number,
       })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     checklist_item: async (p) => {
       if (!supabase) return
@@ -113,7 +114,7 @@ export function useOfflineQueue() {
         .from('project_milestones')
         .update({ note: p.note as string })
         .eq('id', p.milestoneId as string)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     job_complete: async (p) => {
       if (!supabase) return
@@ -126,7 +127,7 @@ export function useOfflineQueue() {
           client_signoff_at: p.completedAt as string,
         })
         .eq('id', p.appointmentId as string)
-      if (error) throw error
+      if (error) throwReadable(error)
     },
     time_log: async (p) => {
       if (!supabase) return
@@ -139,7 +140,7 @@ export function useOfflineQueue() {
         latitude: (p.latitude as number) ?? null,
         longitude: (p.longitude as number) ?? null,
       })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
   }
 
@@ -210,7 +211,7 @@ export function useMyJobs(date?: string) {
         .eq('scheduled_date', day)
         .order('time_slot')
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) =>
         toAppointment(
@@ -242,7 +243,7 @@ export function useMySchedule() {
         .order('scheduled_date')
         .order('time_slot')
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       return (data ?? []).map((row) =>
         toAppointment(
@@ -278,7 +279,7 @@ export function useJob(appointmentId?: string) {
         .eq('id', appointmentId!)
         .maybeSingle()
 
-      if (error) throw error
+      if (error) throwReadable(error)
       if (!data) return null
 
       const crew = (data.appointment_assignees ?? [])
@@ -353,7 +354,7 @@ export function useCompleteMilestone() {
               note: payload.note,
             })
             .eq('id', input.milestoneId)
-          if (error) throw error
+          if (error) throwReadable(error)
         },
       )
     },
@@ -427,7 +428,7 @@ export function useScanSerial() {
           if (error.code === '23505') {
             throw new Error(`Serial ${payload.serialNumber} has already been recorded.`)
           }
-          throw error
+          throw readableDbError(error)
         }
       })
     },
@@ -487,7 +488,7 @@ export function useLogMaterials() {
             p_stock_item_id: input.stockItemId,
             p_quantity: input.quantity,
           })
-          if (error) throw error
+          if (error) throwReadable(error)
         },
       )
     },
@@ -522,7 +523,7 @@ export function useMyTimeLogs() {
         .select('hours, clock_in')
         .gte('clock_in', periodStart.toISOString())
 
-      if (error) throw error
+      if (error) throwReadable(error)
 
       const total = (data ?? []).reduce((sum, r) => sum + Number(r.hours ?? 0), 0)
       // A standard month is roughly 176 hours; anything beyond is overtime.
@@ -558,7 +559,7 @@ export function useProjectSerials(projectId?: string) {
         .eq('project_id', projectId!)
         .order('created_at', { ascending: true })
 
-      if (error) throw error
+      if (error) throwReadable(error)
       return (data ?? []).map((row) => ({
         id: row.id,
         serialNumber: row.serial_number,
@@ -609,7 +610,7 @@ export function useCompleteJob() {
             client_signoff_at: payload.completedAt,
           })
           .eq('id', input.appointmentId)
-        if (error) throw error
+        if (error) throwReadable(error)
       })
     },
     onSuccess: () => {
@@ -639,7 +640,7 @@ export function useChangePassword() {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
       const { error } = await supabase.auth.updateUser({ password: input.password })
-      if (error) throw error
+      if (error) throwReadable(error)
     },
   })
 }
