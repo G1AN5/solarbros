@@ -22,6 +22,7 @@
     "verify:staff": "node scripts/verify-staff-admin.mjs",
     "verify:settings": "node scripts/verify-settings.mjs",
     "verify:estimator": "node scripts/verify-estimator-pricing.mjs",
+    "verify:messaging": "node scripts/verify-messaging.mjs",
     "verify:forms": "node scripts/verify-public-forms.mjs",
     "verify:payments": "node scripts/verify-payments.mjs",
     "verify:contracts": "node scripts/verify-contracts.mjs",

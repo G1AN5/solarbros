@@ -17,13 +17,15 @@ import { NOT_CONNECTED, supabase } from '@/lib/supabase'
    place it cannot be bypassed by a different client.
    ========================================================================== */
 
-/** Derived rather than stored, so initials can never disagree with the name. */
-function initialsFor(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '??'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
+/* `avatar_initials` is NOT set here. It is a GENERATED ALWAYS column, computed
+   by Postgres from `full_name`, and writing to one is an error:
+
+     column "avatar_initials" can only be updated to DEFAULT
+
+   This module computed its own initials and sent them, which failed every save
+   outright. The database was already doing the job — the fix is to stop
+   duplicating it, not to send DEFAULT. Change the name and the initials follow
+   by themselves. */
 
 export interface ProfileEdit {
   fullName: string
@@ -45,7 +47,6 @@ export function useUpdateMyProfile() {
         .from('profiles')
         .update({
           full_name: fullName,
-          avatar_initials: initialsFor(fullName),
           phone: input.phone?.trim() || null,
           address: input.address?.trim() || null,
         })
