@@ -708,7 +708,7 @@ export function EstimatorPage() {
                 <div>
                   <div className="est-summary__figure">
                     {fmtNumber(result.peakLoadW)}
-                    <span className="est-summary__unit">watts peak</span>
+                    <span className="est-summary__unit">watts at once</span>
                   </div>
                   <div className="est-summary__sub">
                     {fmtNumber(result.dailyWh)} Wh per day · {result.applianceCount} appliance
@@ -798,6 +798,16 @@ export function EstimatorPage() {
                       system, from {currency(result.estimatedCost)}
                     </h2>
 
+                    {/* "From X" on its own leaves the visitor guessing what is
+                        and is not in the number — which is the question that
+                        stops people asking for a quote. */}
+                    <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
+                      Supplied and installed: panels, inverter{' '}
+                      {result.batteryCount > 0 ? ', batteries' : ''}, mounting, wiring, the design,
+                      and the permit and net-metering paperwork. No monthly fee. The final price is
+                      confirmed after a free survey of your roof.
+                    </p>
+
                     <div className="est-steps">
                       <div className="est-step">
                         <span className="est-step__n">1</span>
@@ -876,19 +886,25 @@ export function EstimatorPage() {
                   <div className="est-metric">
                     <div className="est-metric__label">Inverter</div>
                     <div className="est-metric__value">{result.inverterKw} kW</div>
-                    <div className="est-metric__note">Sized for your peak draw</div>
+                    <div className="est-metric__note">
+                      Big enough if everything switches on together
+                    </div>
                   </div>
                   <div className="est-metric">
                     <div className="est-metric__label">Batteries</div>
                     <div className="est-metric__value">{result.batteryCount || 'None'}</div>
                     <div className="est-metric__note">
-                      {result.batteryCount ? `${result.batteryKwh} kWh storage` : 'Grid-tied'}
+                      {result.batteryCount
+                        ? `${result.batteryKwh} kWh — covers your evening use`
+                        : 'You draw from the grid after dark'}
                     </div>
                   </div>
                   <div className="est-metric">
                     <div className="est-metric__label">Solar output</div>
                     <div className="est-metric__value">{fmtNumber(result.monthlyKwhProduced)}</div>
-                    <div className="est-metric__note">kWh per month</div>
+                    <div className="est-metric__note">
+                      kWh a month, against the {fmtNumber(result.monthlyKwh)} you use
+                    </div>
                   </div>
                 </div>
 

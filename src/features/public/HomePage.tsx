@@ -274,86 +274,102 @@ export function HomePage() {
       </section>
 
       {/* ------------------------------------------------- 5. PORTFOLIO */}
-      <section className="section section--dark">
-        <div className="container">
-          <Reveal>
-            <div className="section-head">
-              <span className="eyebrow">Portfolio</span>
-              <h2>Recent installations</h2>
-              <span className="section-head__rule" aria-hidden />
-            </div>
-          </Reveal>
+      {/* HIDDEN WHEN THERE IS NOTHING TO SHOW.
+          This section, the reviews below it and the FAQ further down all used
+          to render their heading, their rule and their "see all" button over
+          an empty grid whenever the table behind them was empty — which it is
+          on a new install. A marketing page carrying the words "What our
+          clients say" above a blank band does not read as new, it reads as
+          abandoned, and it invites the visitor to wonder what else is missing.
 
-          <Reveal stagger>
-            <div className="grid">
-              {PORTFOLIO.slice(0, 3).map((project) => (
-                <Card key={project.id} interactive className="portfolio-item">
-                  <div className="portfolio-item__media">Installation photo</div>
-                  <CardBody>
-                    <div className="row row--between">
-                      <h4>{project.title}</h4>
-                      <span className="badge badge--brand">{project.systemSize}</span>
-                    </div>
-                    <p className="small muted" style={{ marginTop: 'var(--space-1)' }}>
-                      {project.location} · {project.segment} · {project.year}
-                    </p>
-                  </CardBody>
-                </Card>
-              ))}
-            </div>
-          </Reveal>
+          Omitting the section entirely is the honest option, and nothing is
+          lost: the moment a real project, review or question exists, the
+          section returns by itself. */}
+      {PORTFOLIO.length > 0 && (
+        <section className="section section--dark">
+          <div className="container">
+            <Reveal>
+              <div className="section-head">
+                <span className="eyebrow">Portfolio</span>
+                <h2>Recent installations</h2>
+                <span className="section-head__rule" aria-hidden />
+              </div>
+            </Reveal>
 
-          <div className="center" style={{ marginTop: 'var(--space-8)' }}>
-            <ButtonLink to="/portfolio" variant="outline">
-              View the full portfolio
-            </ButtonLink>
+            <Reveal stagger>
+              <div className="grid">
+                {PORTFOLIO.slice(0, 3).map((project) => (
+                  <Card key={project.id} interactive className="portfolio-item">
+                    <div className="portfolio-item__media">Installation photo</div>
+                    <CardBody>
+                      <div className="row row--between">
+                        <h4>{project.title}</h4>
+                        <span className="badge badge--brand">{project.systemSize}</span>
+                      </div>
+                      <p className="small muted" style={{ marginTop: 'var(--space-1)' }}>
+                        {project.location} · {project.segment} · {project.year}
+                      </p>
+                    </CardBody>
+                  </Card>
+                ))}
+              </div>
+            </Reveal>
+
+            <div className="center" style={{ marginTop: 'var(--space-8)' }}>
+              <ButtonLink to="/portfolio" variant="outline">
+                View the full portfolio
+              </ButtonLink>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* --------------------------------------------------- 6. REVIEWS */}
-      <section className="section section--eco section--edge">
-        <div className="container">
-          <Reveal>
-            <div className="section-head">
-              <span className="eyebrow">Customer reviews</span>
-              <h2>What our clients say</h2>
-              <span className="section-head__rule" aria-hidden />
-            </div>
-          </Reveal>
+      {/* Hidden while empty — see the note on the portfolio section. */}
+      {REVIEWS.length > 0 && (
+        <section className="section section--eco section--edge">
+          <div className="container">
+            <Reveal>
+              <div className="section-head">
+                <span className="eyebrow">Customer reviews</span>
+                <h2>What our clients say</h2>
+                <span className="section-head__rule" aria-hidden />
+              </div>
+            </Reveal>
 
-          <Reveal stagger>
-            <div className="grid">
-              {REVIEWS.map((review) => (
-                <Card key={review.id}>
-                  <CardBody>
-                    <div className="review__stars" aria-label={`${review.rating} out of 5 stars`}>
-                      {'★'.repeat(review.rating)}
-                      <span className="dim">{'★'.repeat(5 - review.rating)}</span>
-                    </div>
-                    <p className="review__quote">“{review.quote}”</p>
-                    <div className="row">
-                      <span className="avatar">
-                        {review.displayName
-                          .split(' ')
-                          .map((w) => w[0])
-                          .slice(0, 2)
-                          .join('')}
-                      </span>
-                      <div>
-                        <div className="small strong">{review.displayName}</div>
-                        <div className="xs dim">
-                          {review.displayLocation} · {review.systemSummary}
+            <Reveal stagger>
+              <div className="grid">
+                {REVIEWS.map((review) => (
+                  <Card key={review.id}>
+                    <CardBody>
+                      <div className="review__stars" aria-label={`${review.rating} out of 5 stars`}>
+                        {'★'.repeat(review.rating)}
+                        <span className="dim">{'★'.repeat(5 - review.rating)}</span>
+                      </div>
+                      <p className="review__quote">“{review.quote}”</p>
+                      <div className="row">
+                        <span className="avatar">
+                          {review.displayName
+                            .split(' ')
+                            .map((w) => w[0])
+                            .slice(0, 2)
+                            .join('')}
+                        </span>
+                        <div>
+                          <div className="small strong">{review.displayName}</div>
+                          <div className="xs dim">
+                            {review.displayLocation} · {review.systemSummary}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardBody>
-                </Card>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
+                    </CardBody>
+                  </Card>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      )}
 
       {/* ------------------------------- 7. PAYMENT OPTIONS + AFTER-SALES */}
       <section className="section section--muted section--edge">
@@ -423,35 +439,38 @@ export function HomePage() {
       </section>
 
       {/* ------------------------------------------------- 9. FAQ PREVIEW */}
-      <section className="section section--muted">
-        <div className="container container--narrow">
-          <Reveal>
-            <div className="section-head">
-              <span className="eyebrow">FAQ</span>
-              <h2>Common questions</h2>
-            </div>
-          </Reveal>
+      {/* Hidden while empty — see the note on the portfolio section. */}
+      {FAQS.length > 0 && (
+        <section className="section section--muted">
+          <div className="container container--narrow">
+            <Reveal>
+              <div className="section-head">
+                <span className="eyebrow">FAQ</span>
+                <h2>Common questions</h2>
+              </div>
+            </Reveal>
 
-          {FAQS.slice(0, 4).map((faq) => (
-            <div key={faq.id} className="faq__item">
-              {/* <details> gives us an accordion with zero JavaScript. */}
-              <details>
-                <summary className="faq__q" style={{ cursor: 'pointer', listStyle: 'none' }}>
-                  {faq.question}
-                  <span aria-hidden>+</span>
-                </summary>
-                <p className="faq__a">{faq.answer}</p>
-              </details>
-            </div>
-          ))}
+            {FAQS.slice(0, 4).map((faq) => (
+              <div key={faq.id} className="faq__item">
+                {/* <details> gives us an accordion with zero JavaScript. */}
+                <details>
+                  <summary className="faq__q" style={{ cursor: 'pointer', listStyle: 'none' }}>
+                    {faq.question}
+                    <span aria-hidden>+</span>
+                  </summary>
+                  <p className="faq__a">{faq.answer}</p>
+                </details>
+              </div>
+            ))}
 
-          <div className="center" style={{ marginTop: 'var(--space-8)' }}>
-            <ButtonLink to="/contact" variant="ghost">
-              See all questions →
-            </ButtonLink>
+            <div className="center" style={{ marginTop: 'var(--space-8)' }}>
+              <ButtonLink to="/contact" variant="ghost">
+                See all questions →
+              </ButtonLink>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* -------------------------------------------- 10. FINAL CALL TO ACTION */}
       <section className="section section--dark">
