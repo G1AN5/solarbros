@@ -24,6 +24,7 @@ export const cmsKeys = {
   packages: ['cms', 'packages'] as const,
   faqs: ['cms', 'faqs'] as const,
   legal: ['cms', 'legal'] as const,
+  brands: ['cms', 'brands'] as const,
 }
 
 /* ------------------------------------------------------------------ PACKAGES */
@@ -312,6 +313,130 @@ export function useSaveLegalDocument() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: cmsKeys.legal })
       void queryClient.invalidateQueries({ queryKey: ['public'] })
+    },
+  })
+}
+
+/* ---------------------------------------------------------------------- BRANDS */
+
+export interface Brand {
+  id: string
+  name: string
+  logoUrl: string | null
+  websiteUrl: string | null
+  sortOrder: number
+  isActive: boolean
+}
+
+export function useBrands(activeOnly = true) {
+  return useQuery({
+    queryKey: [...cmsKeys.brands, activeOnly],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Brand[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+
+      let query = supabase
+        .from('brands')
+        .select(`id, name, logo_url, website_url, sort_order, is_active`)
+        .order('sort_order')
+
+      if (activeOnly) query = query.eq('is_active', true)
+
+      const { data, error } = await query
+      if (error) throw error
+
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        logoUrl: row.logo_url,
+        websiteUrl: row.website_url,
+        sortOrder: row.sort_order,
+        isActive: row.is_active,
+      }))
+    },
+  })
+}
+
+export type BrandDraft = Omit<Brand, 'id'> & { id?: string }
+
+export function useSaveBrand() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: BrandDraft) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      if (!input.name.trim()) throw new Error('A brand needs a name.')
+
+      const row = {
+        name: input.name.trim(),
+        logo_url: input.logoUrl?.trim() || null,
+        website_url: input.websiteUrl?.trim() || null,
+        sort_order: input.sortOrder,
+        is_active: input.isActive,
+      }
+
+      const query = input.id
+        ? supabase.from('brands').update(row).eq('id', input.id).select()
+        : supabase.from('brands').insert(row).select()
+
+      const { data, error } = await query
+      if (error) throw error
+      if (!data || data.length === 0) {
+        throw new Error('That was not saved — you may not have permission to edit brands.')
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: cmsKeys.brands })
+      void queryClient.invalidateQueries({ queryKey: ['public'] })
+    },
+  })
+}
+
+export function useDeleteBrand() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { error } = await supabase.from('brands').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: cmsKeys.brands })
+      void queryClient.invalidateQueries({ queryKey: ['public'] })
+    },
+  })
+}
+
+/**
+ * Upload a brand logo into the existing `public-media` bucket.
+ *
+ * That bucket is already public-read and already restricted to sales and admin
+ * for writes, so no new storage policy is needed — and a logo on a marketing
+ * page is about as public as a file gets.
+ */
+export function useUploadBrandLogo() {
+  return useMutation({
+    mutationFn: async (file: File): Promise<string> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
+      if (file.size > 5 * 1024 * 1024) throw new Error('That image is over 5 MB.')
+
+      /* A timestamp in the name so replacing a logo does not serve the old one
+         from a cache, and so two brands cannot collide on the same filename. */
+      const safe = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-')
+      const path = `brands/${Date.now()}-${safe}`
+
+      const { error } = await supabase.storage
+        .from('public-media')
+        .upload(path, file, { contentType: file.type })
+
+      if (error) throw error
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('public-media').getPublicUrl(path)
+      return publicUrl
     },
   })
 }

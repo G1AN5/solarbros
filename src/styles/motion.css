@@ -249,10 +249,16 @@
      below, which is what made the hero look misaligned rather than layered. */
   min-height: 420px;
   isolation: isolate;
-  /* The rotation throws the far corner outside the grid cell. Clipping it to
-     the column keeps the panel from reaching past the container's right edge
-     on a wide screen. */
-  overflow: hidden;
+  /* The rotation throws the far corner outside the grid cell, so it is clipped
+     to the column.
+
+     `clip` rather than `hidden`, with a margin: `hidden` cut a straight line
+     across the top of the sun, because the disc is lifted 22% and its corona
+     reaches 22% beyond its own box again. The margin is wide enough for the
+     glow and the rays and far narrower than the panel's overhang, so the thing
+     this rule exists to contain is still contained. */
+  overflow: clip;
+  overflow-clip-margin: 110px;
 }
 
 .solar-mark .panel-array {

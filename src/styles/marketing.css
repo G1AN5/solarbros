@@ -721,3 +721,383 @@
   font-size: var(--text-sm);
   color: var(--ink-400);
 }
+
+/* ============================================================================
+   BRAND MARQUEE
+   ----------------------------------------------------------------------------
+   Replaces a static centred row of nine grey words. Bigger type, real logos
+   where they have been uploaded, and continuous motion — which is what every
+   site that lists suppliers does, because a moving band reads as "many" where
+   a wrapped list reads as "nine".
+   ========================================================================== */
+
+.marquee-band {
+  padding-block: var(--space-10);
+  background:
+    radial-gradient(60% 120% at 50% 0%, rgba(245, 158, 11, 0.07), transparent 70%),
+    var(--bg-surface);
+  border-block: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.marquee__eyebrow {
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--space-6);
+}
+
+.marquee {
+  position: relative;
+  /* Fades the strip out at both ends instead of letting logos collide with the
+     edge of the screen. A mask rather than gradient overlays, so it works on
+     any background without matching a colour. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.marquee__track {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: max-content;
+  animation: marquee-slide 42s linear infinite;
+}
+
+/* Exactly -50%: the second copy lands where the first began, so the reset is
+   invisible. Any other distance makes the strip jump. */
+@keyframes marquee-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee:hover .marquee__track {
+  animation-play-state: paused;
+}
+
+.marquee__item {
+  display: grid;
+  place-items: center;
+  min-width: 140px;
+  height: 64px;
+  padding-inline: var(--space-4);
+  border-radius: var(--radius);
+  transition:
+    transform var(--transition),
+    filter var(--transition),
+    opacity var(--transition);
+}
+
+a.marquee__item:hover {
+  transform: translateY(-3px);
+}
+
+.marquee__logo {
+  max-height: 52px;
+  max-width: 170px;
+  object-fit: contain;
+  /* Greyed until hovered, so nine competing brand palettes do not shout over
+     the page — and colour returns on the one being looked at. */
+  filter: grayscale(1);
+  opacity: 0.72;
+  transition:
+    filter var(--transition),
+    opacity var(--transition);
+}
+
+a.marquee__item:hover .marquee__logo {
+  filter: grayscale(0);
+  opacity: 1;
+}
+
+.marquee__name {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color var(--transition);
+}
+
+a.marquee__item:hover .marquee__name {
+  color: var(--text-brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Stopped, not slowed. A band that never stops moving is precisely what this
+     preference exists to switch off. It then scrolls by hand instead. */
+  .marquee__track {
+    animation: none;
+  }
+  .marquee {
+    overflow-x: auto;
+  }
+}
+
+/* ============================================================================
+   ESTIMATOR TEASER
+   ----------------------------------------------------------------------------
+   Was a single wide card with the text hard left, the button hard right and
+   nothing in between — which on a 1280px screen reads as a layout failure
+   rather than as breathing room. Two columns, with the right one carrying what
+   the estimator actually gives you.
+   ========================================================================== */
+
+.teaser {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: var(--space-12);
+  align-items: center;
+  padding: var(--space-12);
+  border-radius: var(--radius-xl, 20px);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+/* A sun low behind the right-hand column. Pure CSS, no image request, and it
+   gives the panel the warmth the flat white card was missing. */
+.teaser__glow {
+  position: absolute;
+  top: -30%;
+  right: -12%;
+  width: 460px;
+  height: 460px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(251, 191, 36, 0.28) 0%,
+    rgba(245, 158, 11, 0.12) 42%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.teaser__copy,
+.teaser__list {
+  position: relative;
+  z-index: 1;
+}
+
+.teaser__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-5);
+}
+
+.teaser__list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.teaser__list li > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.teaser__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(140deg, var(--brand-400), var(--brand-600));
+  color: var(--white);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.32);
+}
+
+@media (max-width: 900px) {
+  .teaser {
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+    /* The generous desktop padding is a third of a phone screen. */
+    padding: var(--space-6);
+  }
+  .teaser__glow {
+    width: 300px;
+    height: 300px;
+  }
+}
+
+/* ============================================================================
+   FOOTER SOCIAL
+   A bare URL printed as text told nobody anything and invited no click.
+   ========================================================================== */
+
+.social {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: var(--ink-300);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  transition:
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
+}
+
+.social svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.social:hover {
+  background: #1877f2;
+  border-color: #1877f2;
+  color: var(--white);
+  transform: translateY(-2px);
+}
+
+/* ============================================================================
+   SECTION TEXTURE
+   ----------------------------------------------------------------------------
+   The public site was flat panels of solid colour stacked vertically, which
+   reads as a wireframe that never got its final pass. These are very low
+   opacity radial washes — enough that a section has a light source and a sense
+   of depth, not enough to compete with the words on it.
+
+   Gradients rather than images: no request, no layout shift, and they scale to
+   any screen without a second asset.
+   ========================================================================== */
+
+.section--warm {
+  background-image:
+    radial-gradient(70% 90% at 15% 0%, rgba(251, 191, 36, 0.1), transparent 60%),
+    radial-gradient(50% 80% at 95% 100%, rgba(245, 158, 11, 0.08), transparent 65%);
+}
+
+.section--muted {
+  background-image: radial-gradient(60% 70% at 85% 0%, rgba(148, 163, 184, 0.12), transparent 65%);
+}
+
+.section--eco {
+  background-image:
+    radial-gradient(60% 80% at 10% 100%, rgba(16, 185, 129, 0.1), transparent 60%),
+    radial-gradient(50% 70% at 90% 0%, rgba(251, 191, 36, 0.07), transparent 60%);
+}
+
+/* The dark sections get a faint grid — the same motif as the hero, so the page
+   reads as one piece rather than as separate templates. */
+.section--dark {
+  position: relative;
+  background-image:
+    radial-gradient(70% 100% at 50% 0%, rgba(245, 158, 11, 0.12), transparent 60%),
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    64px 64px,
+    64px 64px;
+}
+
+/* ============================================================================
+   CARDS THAT RESPOND
+   A card that does nothing under the pointer reads as a picture of a card.
+   ========================================================================== */
+
+.pkg,
+.portfolio-item,
+.section .card--interactive {
+  transition:
+    transform var(--transition),
+    box-shadow var(--transition),
+    border-color var(--transition);
+}
+
+.pkg:hover,
+.portfolio-item:hover,
+.section .card--interactive:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--brand-300, var(--brand-400));
+}
+
+/* ============================================================================
+   HEADINGS
+   ----------------------------------------------------------------------------
+   A short warm rule under a section heading, which gives the eye somewhere to
+   land between the eyebrow and the body copy. Applied through the existing
+   `.section-head` so every section picks it up without touching the markup.
+   ========================================================================== */
+
+.section-head h2 {
+  position: relative;
+  /* NOT inline-block. The eyebrow above it is an inline element, so making the
+     heading inline-block put them on the same line — the FAQ section read
+     "FAQ Common questions" as one run of text. A block heading still centres
+     the rule below, because the rule is positioned from the heading's own
+     centre and the heading fills the column. */
+}
+
+.section-head h2::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-400), var(--brand-600));
+}
+
+/* The section-head already ships its own rule element in most places. The
+   pseudo-element above replaces it, so the original is hidden here rather than
+   removed from every call site.
+
+   (An earlier version wrote `h2::after + .section-head__rule`, which is not a
+   legal selector — a pseudo-element cannot be followed by a combinator — and
+   the CSS minifier rejected the whole stylesheet.) */
+.section-head__rule {
+  display: none;
+}
+
+.section-head {
+  margin-bottom: var(--space-12);
+}
+
+/* ============================================================================
+   PUBLIC BUTTONS
+   A little more presence on the primary action, which is the one thing on a
+   marketing page that has to be obvious.
+   ========================================================================== */
+
+.shell--public .btn--primary {
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.3);
+}
+
+.shell--public .btn--primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(245, 158, 11, 0.38);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pkg:hover,
+  .portfolio-item:hover,
+  .section .card--interactive:hover,
+  .shell--public .btn--primary:hover:not(:disabled) {
+    transform: none;
+  }
+}

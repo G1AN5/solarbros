@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom'
 
 import { ButtonLink } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
+import { BrandMarquee } from '@/components/ui/BrandMarquee'
+import { CountUp } from '@/components/ui/CountUp'
 import { Reveal } from '@/components/ui/Reveal'
 import { SolarMark } from '@/components/ui/SolarMark'
 import { useCompany, useFaqs } from '@/lib/queries/public-site'
@@ -109,10 +111,7 @@ export function HomePage() {
               <h1 className="hero__title" style={{ marginTop: 'var(--space-3)' }}>
                 {COMPANY.heroHeadline}
               </h1>
-              <p className="hero__sub">
-                {COMPANY.heroSubhead} Most homes are switched on in {COMPANY.installDays} working
-                days.
-              </p>
+              <p className="hero__sub">{COMPANY.heroSubhead}</p>
             </div>
 
             <div className="row row--wrap">
@@ -137,64 +136,108 @@ export function HomePage() {
             numbers in a narrow column wrapped badly on a laptop. */}
         <div className="container">
           <div className="trust-strip">
+            {/* The figures count up the first time they are scrolled to. Four
+                static numbers were the flattest thing on an otherwise moving
+                page, and this is the one place where a little movement earns
+                its keep — it is what makes somebody read them. */}
             <div>
-              <div className="trust-strip__value">{COMPANY.homesPowered.toLocaleString()}+</div>
+              <div className="trust-strip__value">
+                <CountUp to={COMPANY.homesPowered} suffix="+" />
+              </div>
               <div className="trust-strip__label">Homes powered</div>
             </div>
             <div>
-              <div className="trust-strip__value">{COMPANY.businessesPowered}</div>
+              <div className="trust-strip__value">
+                <CountUp to={COMPANY.businessesPowered} />
+              </div>
               <div className="trust-strip__label">Businesses powered</div>
             </div>
             <div>
-              <div className="trust-strip__value">{COMPANY.warrantyPanelYears} yrs</div>
+              <div className="trust-strip__value">
+                <CountUp to={COMPANY.warrantyPanelYears} suffix=" yrs" />
+              </div>
               <div className="trust-strip__label">Panel warranty</div>
             </div>
             <div>
-              <div className="trust-strip__value">{COMPANY.installDays} days</div>
+              <div className="trust-strip__value">
+                <CountUp to={COMPANY.installDays} suffix=" days" />
+              </div>
               <div className="trust-strip__label">Typical install</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Brand logos strip — "solar brands available" from the spec. */}
-      <div className="section--plain" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="container" style={{ paddingBlock: 'var(--space-6)' }}>
-          <div
-            className="row row--wrap"
-            style={{ justifyContent: 'center', gap: 'var(--space-8)' }}
-          >
-            <span className="xs dim strong">TRUSTED BRANDS WE INSTALL</span>
-            {COMPANY.brands.map((brand) => (
-              <span key={brand} className="small strong muted">
-                {brand}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Brands. Was nine grey words on a centred row that wrapped to two
+          lines; now a continuous strip fed from the `brands` table, with logos
+          and links the administrator maintains under Website Content. */}
+      <BrandMarquee />
 
       {/* ------------------------------------------- 2. ESTIMATOR TEASER */}
       <section className="section section--warm section--edge">
         <div className="container">
-          <Card accent>
-            <CardBody>
-              <div className="row row--between row--wrap" style={{ gap: 'var(--space-6)' }}>
-                <div style={{ maxWidth: '52ch' }}>
-                  <span className="eyebrow">Free · No obligation</span>
-                  <h2 style={{ marginTop: 'var(--space-2)' }}>How much would you actually save?</h2>
-                  <p className="muted" style={{ marginTop: 'var(--space-2)' }}>
-                    Enter your monthly bill and roof size. You get a recommended system size, an
-                    estimated cost, and a payback period in about 20 seconds — plus a detailed PDF
-                    quotation emailed to you.
-                  </p>
-                </div>
-                <ButtonLink to="/estimator" variant="primary" size="lg">
-                  Open the estimator →
-                </ButtonLink>
-              </div>
-            </CardBody>
-          </Card>
+          {/* Two columns rather than one wide row. The old layout pinned the
+              text hard left and the button hard right with an acre of nothing
+              between them, which on a wide screen read as a mistake. The right
+              column now carries the three things the estimator gives you, so
+              the space is doing work. */}
+          <div className="teaser">
+            <div className="teaser__glow" aria-hidden="true" />
+
+            <div className="teaser__copy">
+              <span className="eyebrow">Free · No obligation</span>
+              <h2 style={{ marginBlock: 'var(--space-3)' }}>How much would you actually save?</h2>
+              <p className="muted">
+                Tell us which appliances you run and for how long. You get a recommended system
+                size, an estimated price and a payback period — in about a minute, with no salesman
+                and no email required to see it.
+              </p>
+              <ButtonLink
+                to="/estimator"
+                variant="primary"
+                size="lg"
+                style={{ marginTop: 'var(--space-6)' }}
+              >
+                Open the estimator →
+              </ButtonLink>
+            </div>
+
+            <ul className="teaser__list">
+              <li>
+                <span className="teaser__icon" aria-hidden="true">
+                  ☀
+                </span>
+                <span>
+                  <strong>The right size</strong>
+                  <span className="small muted">
+                    Panels, inverter and battery, worked out from what you actually run.
+                  </span>
+                </span>
+              </li>
+              <li>
+                <span className="teaser__icon" aria-hidden="true">
+                  ₱
+                </span>
+                <span>
+                  <strong>A real price</strong>
+                  <span className="small muted">
+                    What it costs installed, and what it saves you every month.
+                  </span>
+                </span>
+              </li>
+              <li>
+                <span className="teaser__icon" aria-hidden="true">
+                  ⏱
+                </span>
+                <span>
+                  <strong>When it pays back</strong>
+                  <span className="small muted">
+                    Against a system built to last twenty-five years.
+                  </span>
+                </span>
+              </li>
+            </ul>
+          </div>
         </div>
       </section>
 

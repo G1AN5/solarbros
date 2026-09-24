@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { QueryState } from '@/components/ui/QueryState'
 import { Tabs } from '@/components/ui/Tabs'
+import { BrandsEditor } from './BrandsEditor'
 import { FaqEditor, LegalEditor, PackagesEditor } from './ContentEditors'
 import { useAuth } from '@/app/auth/useAuth'
 import { date } from '@/lib/format'
@@ -44,7 +45,7 @@ import { useUploadPublicMedia } from '@/lib/queries/storage'
    becomes roughly 300 KB without the original ever crossing the network.
    ========================================================================== */
 
-type Tab = 'portfolio' | 'blog' | 'reviews' | 'packages' | 'faq' | 'legal'
+type Tab = 'portfolio' | 'blog' | 'reviews' | 'packages' | 'brands' | 'faq' | 'legal'
 
 const EMPTY_PORTFOLIO = {
   id: undefined as string | undefined,
@@ -134,6 +135,7 @@ export function ContentPage() {
             count: pending.length || undefined,
           },
           { value: 'packages' as Tab, label: 'Packages' },
+          { value: 'brands' as Tab, label: 'Brands' },
           { value: 'faq' as Tab, label: 'FAQ' },
           { value: 'legal' as Tab, label: 'Legal pages' },
         ]}
@@ -145,6 +147,7 @@ export function ContentPage() {
           writable by the database from the start and had no screen, so the only
           way to add a package or correct an answer was to open the SQL editor. */}
       {tab === 'packages' && <PackagesEditor />}
+      {tab === 'brands' && <BrandsEditor />}
       {tab === 'faq' && <FaqEditor />}
       {tab === 'legal' && <LegalEditor />}
 

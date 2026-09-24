@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -31,6 +32,11 @@ interface ButtonProps
 
 interface LinkProps extends BaseProps {
   to: string
+  /* A router Link takes one, and callers kept needing it for spacing. Without
+     it every use site had to wrap the button in a spacer div. */
+  style?: CSSProperties
+  target?: string
+  rel?: string
 }
 
 function classes({ variant = 'primary', size = 'md', block, className }: BaseProps) {
@@ -55,9 +61,15 @@ export function Button({ children, ...props }: ButtonProps) {
 }
 
 /** Same look as <Button>, but navigates. Use for every call-to-action. */
-export function ButtonLink({ to, children, ...props }: LinkProps) {
+export function ButtonLink({ to, children, style, target, rel, ...props }: LinkProps) {
   return (
-    <Link to={to} className={classes({ ...props, children })}>
+    <Link
+      to={to}
+      className={classes({ ...props, children })}
+      style={style}
+      target={target}
+      rel={rel}
+    >
       {children}
     </Link>
   )
