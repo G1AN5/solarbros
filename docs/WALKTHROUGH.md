@@ -38,16 +38,25 @@ and password and tick _Auto Confirm User_, so you are not waiting on an email.
 Then in **SQL Editor**, promote it:
 
 ```sql
-update public.profiles
-set role = 'admin'
-where email = 'YOUR-ADMIN-EMAIL@example.com';
+select public.grant_admin('YOUR-ADMIN-EMAIL@example.com');
 ```
 
-This is the one time a role is ever set by hand, and it only works from the SQL
-editor. The application cannot do it — a database trigger refuses any change to
-`profiles.role` that has not come through the approval function, and a trigger
-fires regardless of who is asking, so this is not something an administrator can
-be tricked into and not something the `service_role` key can bypass either.
+It replies `… is now an administrator (was client)`. Run it again for a second
+administrator whenever you need one.
+
+**A plain `update public.profiles set role = 'admin'` will be refused**, and that
+is deliberate. A database trigger rejects every change to `profiles.role` that
+has not come through an approved route, and a trigger fires regardless of who is
+asking — so this is not something an administrator can be tricked into through
+the interface, and not something the `service_role` key can bypass either.
+
+`grant_admin` is one of those approved routes, and it is reachable only over a
+direct database connection. It is revoked from `anon`, `authenticated` and
+`service_role`, so no request from a browser can call it however the caller is
+signed in. Every use writes a `critical` row to the audit log.
+
+> If it answers `No account exists for …`, the user was not created in step one,
+> or the email is spelled differently. Check **Authentication → Users**.
 
 ### Decide your six addresses
 
