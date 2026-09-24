@@ -166,6 +166,15 @@ hr {
   max-width: 72ch;
 }
 
+/* A paragraph capped at 72ch inside a wider section keeps its box pinned to the
+   left, so `.center` centred the TEXT inside a box that was itself flush left —
+   reading as "centred, but off to one side". Centring the box too is what the
+   class was always meant to do. Applies wherever a measure-limited paragraph is
+   asked to centre, not just the one place it was noticed. */
+.shell--public p.center {
+  margin-inline: auto;
+}
+
 /* ============================================================================
    FOCUS
    ----------------------------------------------------------------------------

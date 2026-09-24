@@ -40,9 +40,20 @@ export function useStaff() {
     queryFn: async (): Promise<StaffMember[]> => {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
+      /* STAFF ONLY. This list is the Roles & access directory — who works here
+         and what they may reach. It used to return every profile, customers
+         included, so the page a company uses to manage half a dozen employees
+         would fill with hundreds of customer accounts and the employees would
+         be impossible to find.
+
+         Customers are not managed from here at all: their role is fixed, they
+         cannot be approved or given access, and the CRM is where a person deals
+         with a customer. Filtering in the query rather than in the page means
+         the rows are never fetched. */
       const { data, error } = await supabase
         .from('profiles')
         .select('id, full_name, email, role, phone, is_active, created_at, avatar_initials')
+        .neq('role', 'client')
         .order('created_at', { ascending: true })
 
       if (error) throw error

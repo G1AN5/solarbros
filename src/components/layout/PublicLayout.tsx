@@ -141,7 +141,6 @@ export function PublicLayout() {
               <Link to="/legal/privacy">Privacy Policy</Link>
               <Link to="/legal/terms">Terms of Service</Link>
               <Link to="/legal/warranty">Warranty Terms</Link>
-              <Link to="/site-map">Site Map (dev)</Link>
             </div>
           </div>
 

@@ -186,26 +186,42 @@ export function ContactPage() {
                 </CardBody>
               </Card>
 
-              {/* Map placeholder — embed Google Maps or Leaflet here. */}
+              {/* THE OFFICE, ON A MAP.
+                  `loading="lazy"` matters more here than it looks: a Google
+                  Maps embed pulls several hundred kilobytes of script and
+                  tiles, and this sits below the fold on a page people often
+                  reach on mobile data. Deferring it until it is scrolled to
+                  keeps the rest of the page fast.
+
+                  The iframe fills the card's width rather than the 600x450 the
+                  embed code ships with, which would overflow the column on a
+                  phone. */}
               <Card>
-                <div
+                <iframe
+                  title="SolarBros office location"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d30903.57353662163!2d121.00095411254162!3d14.487749700601894!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397cf5f7b21c075%3A0x9c5428548d604090!2sFive%20Brothers%20Solutions%20Inc.!5e0!3m2!1sen!2sph!4v1790262713549!5m2!1sen!2sph"
                   style={{
-                    height: 220,
-                    background:
-                      'repeating-linear-gradient(45deg, var(--ink-100), var(--ink-100) 12px, var(--ink-200) 12px, var(--ink-200) 24px)',
+                    border: 0,
+                    display: 'block',
+                    width: '100%',
+                    height: 260,
                     borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-                    display: 'grid',
-                    placeItems: 'center',
-                    color: 'var(--text-muted)',
                   }}
-                >
-                  🗺️ Map embed goes here
-                </div>
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                />
                 <CardBody>
-                  <p className="small muted">
-                    Google Maps embed or a Leaflet map showing the office pin and the shaded
-                    service-area coverage.
-                  </p>
+                  <p className="small muted">{COMPANY.address}</p>
+                  <a
+                    className="small"
+                    style={{ color: 'var(--text-brand)', fontWeight: 600 }}
+                    href="https://www.google.com/maps/search/?api=1&query=Five+Brothers+Solutions+Inc."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open in Google Maps →
+                  </a>
                 </CardBody>
               </Card>
 

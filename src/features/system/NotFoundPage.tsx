@@ -1,4 +1,4 @@
-import { Link, useRouteError } from 'react-router-dom'
+import { useRouteError } from 'react-router-dom'
 
 import { ButtonLink } from '@/components/ui/Button'
 import { useAuth } from '@/app/auth/useAuth'
@@ -55,12 +55,11 @@ export function NotFoundPage() {
           </ButtonLink>
         </div>
 
-        <p className="small dim" style={{ marginTop: 'var(--space-8)' }}>
-          Reviewing the app?{' '}
-          <Link to="/site-map" style={{ color: 'var(--text-brand)', fontWeight: 600 }}>
-            See the full application map
-          </Link>
-        </p>
+        {/* The developer site map used to be advertised here and in the public
+            footer. It is a map of every route in the application, including the
+            staff ones, shown to somebody who has just mistyped a URL. The route
+            still exists for development; nothing on the public site points at
+            it any more. */}
       </div>
     </div>
   )

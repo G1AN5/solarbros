@@ -1,6 +1,8 @@
 import { type FormEvent, useState } from 'react'
 
 import { Badge } from '@/components/ui/Badge'
+import { Avatar } from '@/components/ui/Avatar'
+import { ButtonLink } from '@/components/ui/Button'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { FormError } from '@/components/ui/FormError'
@@ -87,15 +89,29 @@ export function FieldAccountPage() {
 
       <Card>
         <CardBody>
-          <div className="row">
-            <span className="avatar" style={{ width: 52, height: 52, fontSize: 'var(--text-lg)' }}>
-              {user?.avatarInitials}
-            </span>
-            <div>
-              <div className="strong">{user?.fullName}</div>
-              <div className="small muted">{user && ROLE_LABEL[user.role]}</div>
-              <div className="xs dim">{user?.email}</div>
+          <div className="row row--between">
+            <div className="row">
+              <Avatar
+                initials={user?.avatarInitials ?? '??'}
+                url={user?.avatarUrl}
+                name={user?.fullName}
+                size="lg"
+              />
+              <div>
+                <div className="strong">{user?.fullName}</div>
+                <div className="small muted">{user && ROLE_LABEL[user.role]}</div>
+                <div className="xs dim">{user?.email}</div>
+              </div>
             </div>
+          </div>
+
+          {/* A technician could not change their own name or photo from
+              anywhere: the profile page was mounted in the client portal and
+              the operations hub, and the field portal reaches neither. */}
+          <div style={{ marginTop: 'var(--space-4)' }}>
+            <ButtonLink to="/field/profile" variant="outline" block>
+              Edit your profile
+            </ButtonLink>
           </div>
         </CardBody>
       </Card>

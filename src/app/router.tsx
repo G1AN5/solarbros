@@ -254,6 +254,7 @@ export const router = createBrowserRouter([
           { path: 'schedule', element: <FieldSchedulePage /> },
           { path: 'logging', element: <FieldLoggingPage /> },
           { path: 'messages', element: <MessagesPage /> },
+          { path: 'profile', element: <ProfileSettingsPage /> },
           { path: 'account', element: <FieldAccountPage /> },
         ],
       },

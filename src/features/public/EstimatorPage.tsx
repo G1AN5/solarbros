@@ -244,28 +244,36 @@ export function EstimatorPage() {
         <details className="est-explain" style={{ marginBottom: 'var(--space-8)' }}>
           <summary>First time buying solar? Start here — what a “watt” actually means</summary>
           <div className="est-explain__body">
+            {/* The car speedometer and "distance travelled" comparison that
+                used to be here explained one abstract idea with another, and
+                "a fast appliance" is not a phrase anybody uses about a fridge.
+                These use appliances the reader already owns, and a comparison
+                they can check against their own bill. */}
             <div className="est-analogy">
               <div className="est-analogy__card">
-                <div className="est-analogy__term">Watts (W) — how fast</div>
+                <div className="est-analogy__term">Watts (W) — how hard it pulls</div>
                 <p className="est-analogy__body">
-                  How quickly an appliance uses electricity <em>right now</em>. Think of the
-                  speedometer in a car. A 9 W LED bulb sips. A 1,500 W kettle gulps. Nothing about
-                  time — just the rate at this instant.
+                  How much electricity an appliance needs while it is switched on. An LED bulb needs
+                  about <strong>9 W</strong>. A 1 HP aircon needs about <strong>750 W</strong> — so
+                  it pulls as hard as eighty of those bulbs. This says nothing about how long it
+                  runs.
                 </p>
               </div>
               <div className="est-analogy__card">
-                <div className="est-analogy__term">Watt-hours (Wh) — how much</div>
+                <div className="est-analogy__term">Watt-hours (Wh) — what you used</div>
                 <p className="est-analogy__body">
-                  How much electricity was actually used, once you account for how long it ran. That
-                  is the distance travelled, not the speed. A fast appliance used briefly can cost
-                  less than a slow one left on all day.
+                  Watts multiplied by hours. Running that aircon for <strong>one hour</strong> uses
+                  more electricity than leaving the LED bulb on for{' '}
+                  <strong>three whole days</strong>. It is why the hours matter as much as the
+                  appliance.
                 </p>
               </div>
               <div className="est-analogy__card">
-                <div className="est-analogy__term">Kilowatt-hours (kWh) — the bill</div>
+                <div className="est-analogy__term">Kilowatt-hours (kWh) — what you pay for</div>
                 <p className="est-analogy__body">
-                  1 kWh = 1,000 Wh. This is the only unit your electricity provider charges you for.
-                  Every peso on your bill is a kWh multiplied by the rate.
+                  1 kWh = 1,000 Wh, and it is the only unit on your electricity bill. Every peso you
+                  are charged is kWh multiplied by the rate — {currency(region.ratePerKwh)} in{' '}
+                  {region.label.split(' (')[0]}.
                 </p>
               </div>
             </div>

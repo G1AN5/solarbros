@@ -37,6 +37,12 @@ export interface CompanyProfile {
   warrantyPanelYears: number
   warrantyInverterYears: number
   warrantyWorkmanshipYears: number
+  /* A hybrid system is most of what this company sells and the battery had no
+     warranty figure at all — only panels, inverter and workmanship. */
+  warrantyBatteryYears: number
+  /** The two sentences at the top of the home page. */
+  heroHeadline: string
+  heroSubhead: string
 }
 
 /**
@@ -103,6 +109,22 @@ export function useCompany(): CompanyProfile {
     warrantyPanelYears: settingNum(settings, 'warranty.panel_years', 25),
     warrantyInverterYears: settingNum(settings, 'warranty.inverter_years', 10),
     warrantyWorkmanshipYears: settingNum(settings, 'warranty.workmanship_years', 2),
+    warrantyBatteryYears: settingNum(settings, 'warranty.battery_years', 8),
+
+    /* The most important sentence on the site was compiled into the bundle, so
+       changing it needed a developer and a deploy. The fallbacks are the words
+       that used to be hardcoded, which keeps the page sensible if settings are
+       slow or unreachable. */
+    heroHeadline: settingText(
+      settings,
+      'home.hero_headline',
+      'Cut your electricity bill by up to 70%.',
+    ),
+    heroSubhead: settingText(
+      settings,
+      'home.hero_subhead',
+      'Design, permits, installation and lifetime after-sales support — handled end to end by one team.',
+    ),
   }
 }
 

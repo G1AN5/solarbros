@@ -103,12 +103,15 @@ export function HomePage() {
               <span className="eyebrow" style={{ color: 'var(--brand-400)' }}>
                 Solar for homes &amp; businesses
               </span>
+              {/* Both sentences come from Business Settings. They were the
+                  most important copy on the site and the only way to change
+                  them was a code edit and a deploy. */}
               <h1 className="hero__title" style={{ marginTop: 'var(--space-3)' }}>
-                Cut your electricity bill by up to&nbsp;70%.
+                {COMPANY.heroHeadline}
               </h1>
               <p className="hero__sub">
-                Design, permits, installation and lifetime after-sales support — handled end to end
-                by one team. Most homes are switched on in {COMPANY.installDays} working days.
+                {COMPANY.heroSubhead} Most homes are switched on in {COMPANY.installDays} working
+                days.
               </p>
             </div>
 
@@ -406,7 +409,14 @@ export function HomePage() {
                       <li>Annual preventive maintenance packages</li>
                       <li>Warranty registration, and transfer if you sell the property</li>
                       <li>System expansion and upgrade requests handled in-portal</li>
+                      {/* All three terms, not just the panels. A hybrid system
+                          is mostly what this company sells, and the battery is
+                          the part a customer worries about most — quoting only
+                          the panel warranty invites the question rather than
+                          answering it. */}
                       <li>{COMPANY.warrantyPanelYears}-year panel performance warranty</li>
+                      <li>{COMPANY.warrantyBatteryYears}-year battery warranty</li>
+                      <li>{COMPANY.warrantyInverterYears}-year inverter warranty</li>
                     </ul>
                   </CardBody>
                 </Card>
