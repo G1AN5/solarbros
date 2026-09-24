@@ -182,6 +182,14 @@ export const ADMIN_NAV: NavGroup[] = [
     heading: 'Revenue',
     items: [
       {
+        label: 'Enquiries',
+        to: '/admin/enquiries',
+        icon: '✉',
+        roles: ['sales', 'admin'],
+        description:
+          'Quotation requests and visit bookings from the public site, with the contact details needed to answer them.',
+      },
+      {
         label: 'Leads & Pipeline',
         to: '/admin/crm',
         icon: '◐',

@@ -33,6 +33,7 @@ import {
   HrPayrollPage,
   InventoryPage,
   LegalPage,
+  EnquiriesPage,
   MessagesPage,
   NotificationsPage,
   ProfileSettingsPage,
@@ -207,6 +208,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { index: true, element: guard('/admin', <AnalyticsPage />) },
+          { path: 'enquiries', element: guard('/admin/enquiries', <EnquiriesPage />) },
           { path: 'crm', element: guard('/admin/crm', <CrmPipelinePage />) },
           { path: 'quotes', element: guard('/admin/quotes', <QuotesPage />) },
           { path: 'projects', element: guard('/admin/projects', <AdminProjectsPage />) },

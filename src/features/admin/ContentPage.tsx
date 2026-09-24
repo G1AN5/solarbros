@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { QueryState } from '@/components/ui/QueryState'
 import { Tabs } from '@/components/ui/Tabs'
+import { FaqEditor, LegalEditor, PackagesEditor } from './ContentEditors'
 import { useAuth } from '@/app/auth/useAuth'
 import { date } from '@/lib/format'
 import {
@@ -43,7 +44,7 @@ import { useUploadPublicMedia } from '@/lib/queries/storage'
    becomes roughly 300 KB without the original ever crossing the network.
    ========================================================================== */
 
-type Tab = 'portfolio' | 'blog' | 'reviews'
+type Tab = 'portfolio' | 'blog' | 'reviews' | 'packages' | 'faq' | 'legal'
 
 const EMPTY_PORTFOLIO = {
   id: undefined as string | undefined,
@@ -132,10 +133,20 @@ export function ContentPage() {
             label: 'Reviews',
             count: pending.length || undefined,
           },
+          { value: 'packages' as Tab, label: 'Packages' },
+          { value: 'faq' as Tab, label: 'FAQ' },
+          { value: 'legal' as Tab, label: 'Legal pages' },
         ]}
         active={tab}
         onChange={setTab}
       />
+
+      {/* The package range, the FAQ and the legal pages. All three were
+          writable by the database from the start and had no screen, so the only
+          way to add a package or correct an answer was to open the SQL editor. */}
+      {tab === 'packages' && <PackagesEditor />}
+      {tab === 'faq' && <FaqEditor />}
+      {tab === 'legal' && <LegalEditor />}
 
       {/* ==================================================== PORTFOLIO */}
       {tab === 'portfolio' && (

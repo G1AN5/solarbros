@@ -134,6 +134,9 @@ export const ProfileSettingsPage = lazy(() =>
   })),
 )
 
+export const EnquiriesPage = lazy(() =>
+  import('@/features/admin/EnquiriesPage').then((m) => ({ default: m.EnquiriesPage })),
+)
 export const GovernancePage = lazy(() =>
   import('@/features/admin/GovernancePage').then((m) => ({ default: m.GovernancePage })),
 )

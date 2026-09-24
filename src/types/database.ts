@@ -293,6 +293,35 @@ export type Database = {
           },
         ]
       }
+      booking_blackouts: {
+        Row: {
+          blackout_date: string
+          created_at: string
+          created_by: string | null
+          reason: string | null
+        }
+        Insert: {
+          blackout_date: string
+          created_at?: string
+          created_by?: string | null
+          reason?: string | null
+        }
+        Update: {
+          blackout_date?: string
+          created_at?: string
+          created_by?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_blackouts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commissions: {
         Row: {
           amount: number
@@ -803,10 +832,12 @@ export type Database = {
           address: string | null
           assigned_to: string | null
           budget_range: string | null
+          contacted_by: string | null
           converted_client_id: string | null
           created_at: string
           email: string
           estimated_kw: number | null
+          first_contacted_at: string | null
           id: string
           in_service_area: boolean | null
           is_decision_maker: boolean | null
@@ -818,6 +849,7 @@ export type Database = {
           phone: string | null
           qualification_notes: string | null
           qualified: boolean | null
+          quotation_sent_at: string | null
           score: number
           source: Database["public"]["Enums"]["lead_source"]
           stage: Database["public"]["Enums"]["lead_stage"]
@@ -828,10 +860,12 @@ export type Database = {
           address?: string | null
           assigned_to?: string | null
           budget_range?: string | null
+          contacted_by?: string | null
           converted_client_id?: string | null
           created_at?: string
           email: string
           estimated_kw?: number | null
+          first_contacted_at?: string | null
           id?: string
           in_service_area?: boolean | null
           is_decision_maker?: boolean | null
@@ -843,6 +877,7 @@ export type Database = {
           phone?: string | null
           qualification_notes?: string | null
           qualified?: boolean | null
+          quotation_sent_at?: string | null
           score?: number
           source?: Database["public"]["Enums"]["lead_source"]
           stage?: Database["public"]["Enums"]["lead_stage"]
@@ -853,10 +888,12 @@ export type Database = {
           address?: string | null
           assigned_to?: string | null
           budget_range?: string | null
+          contacted_by?: string | null
           converted_client_id?: string | null
           created_at?: string
           email?: string
           estimated_kw?: number | null
+          first_contacted_at?: string | null
           id?: string
           in_service_area?: boolean | null
           is_decision_maker?: boolean | null
@@ -868,6 +905,7 @@ export type Database = {
           phone?: string | null
           qualification_notes?: string | null
           qualified?: boolean | null
+          quotation_sent_at?: string | null
           score?: number
           source?: Database["public"]["Enums"]["lead_source"]
           stage?: Database["public"]["Enums"]["lead_stage"]
@@ -883,8 +921,50 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "leads_contacted_by_fkey"
+            columns: ["contacted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "leads_converted_client_id_fkey"
             columns: ["converted_client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_documents: {
+        Row: {
+          published: boolean
+          sections: Json
+          slug: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          published?: boolean
+          sections?: Json
+          slug: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          published?: boolean
+          sections?: Json
+          slug?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_documents_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2980,6 +3060,7 @@ export type Database = {
         Returns: undefined
       }
       available_slots: { Args: { p_date: string }; Returns: Json }
+      booking_date_open: { Args: { p_date: string }; Returns: boolean }
       check_public_form_rate: { Args: { p_email: string }; Returns: undefined }
       claim_notifications: {
         Args: { p_limit?: number; p_worker: string }
