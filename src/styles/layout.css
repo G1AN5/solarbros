@@ -211,6 +211,19 @@
 .pub-footer a:hover {
   color: var(--brand-400);
 }
+
+/* On a phone the footer IS the site navigation — it carries every destination
+   the header does not. At 30px these links sit close enough together that a
+   thumb regularly lands on the one above or below. Touch pointers only, so the
+   desktop footer keeps its tight column. */
+@media (pointer: coarse) {
+  .pub-footer a {
+    padding-block: var(--space-2);
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
 .pub-footer__bottom {
   margin-top: var(--space-10);
   padding-top: var(--space-6);

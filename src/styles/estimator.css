@@ -154,6 +154,25 @@
   cursor: not-allowed;
 }
 
+/* ----------------------------------------------------------------------------
+   THUMBS, NOT CURSORS
+   30px is comfortable with a mouse and too small with a thumb. These steppers
+   are the most-tapped controls on the most-visited page of the public site —
+   somebody building an appliance list taps them dozens of times — and a missed
+   tap on a "+" either does nothing or hits the row next to it.
+
+   Widened only where there is a coarse pointer, so the desktop layout keeps its
+   compact rows. `pointer: coarse` catches touch devices regardless of screen
+   width, which a width media query alone would miss on a tablet.
+   -------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  .est-qty__btn {
+    width: 44px;
+    height: 44px;
+    font-size: var(--text-lg);
+  }
+}
+
 .est-qty__value {
   min-width: 1.5rem;
   text-align: center;
