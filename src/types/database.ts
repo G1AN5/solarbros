@@ -452,6 +452,68 @@ export type Database = {
           },
         ]
       }
+      conversation_participants: {
+        Row: {
+          conversation_id: string
+          last_read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          last_read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          last_read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_participants_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          last_message_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_message_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_message_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           client_id: string | null
@@ -886,6 +948,45 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          author_id: string | null
+          body: string
+          conversation_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
         ]
@@ -2868,6 +2969,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      am_in_conversation: { Args: { p_conversation: string }; Returns: boolean }
       approve_staff: {
         Args: {
           p_approve: boolean
@@ -2954,6 +3056,21 @@ export type Database = {
       is_crew_on_project: { Args: { p_project_id: string }; Returns: boolean }
       is_internal: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      may_message: { Args: { p_other: string }; Returns: boolean }
+      messageable_people: {
+        Args: never
+        Returns: {
+          avatar_initials: string
+          avatar_url: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+        }[]
+      }
+      open_conversation: {
+        Args: { p_body: string; p_other: string }
+        Returns: string
+      }
       owns_project: { Args: { p_project_id: string }; Returns: boolean }
       project_contact: { Args: { p_project_id: string }; Returns: Json }
       project_gate_status: { Args: { p_project_id: string }; Returns: Json }
@@ -3017,6 +3134,12 @@ export type Database = {
         Returns: undefined
       }
       staff_display_names: { Args: { p_ids: string[] }; Returns: Json }
+      staff_for_client: {
+        Args: { p_client: string }
+        Returns: {
+          user_id: string
+        }[]
+      }
       submit_enquiry: {
         Args: {
           p_address?: string

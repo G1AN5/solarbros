@@ -123,6 +123,11 @@ export const FinancePage = lazy(() =>
   import('@/features/admin/FinancePage').then((m) => ({ default: m.FinancePage })),
 )
 /* Shared by all three portals — one page, mounted at three paths. */
+export const MessagesPage = lazy(() =>
+  import('@/features/messages/MessagesPage').then((m) => ({ default: m.MessagesPage })),
+)
+
+/* Shared by all three portals — one page, mounted at three paths. */
 export const ProfileSettingsPage = lazy(() =>
   import('@/features/account/ProfileSettingsPage').then((m) => ({
     default: m.ProfileSettingsPage,

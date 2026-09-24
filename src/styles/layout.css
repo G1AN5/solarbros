@@ -577,7 +577,12 @@
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* Derived from the number of items rather than hardcoded to four. Adding
+     Messages to FIELD_NAV previously left a fifth link squeezed outside the
+     grid, which is the kind of breakage a nav config should not be able to
+     cause from another file. */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   height: var(--fieldnav-h);
   background: var(--bg-surface);
   border-top: 1px solid var(--border);

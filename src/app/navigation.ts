@@ -145,6 +145,12 @@ export const CLIENT_NAV: NavGroup[] = [
         description: 'Milestone alerts and appointment reminders (in-app / email / SMS).',
       },
       {
+        label: 'Messages',
+        to: '/portal/messages',
+        icon: '✎',
+        description: 'Talk directly to the people working on your installation.',
+      },
+      {
         label: 'Your Profile',
         to: '/portal/profile',
         icon: '☺',
@@ -322,6 +328,13 @@ export const ADMIN_NAV: NavGroup[] = [
         description: 'Immutable record of privileged actions, for compliance review.',
       },
       {
+        label: 'Messages',
+        to: '/admin/messages',
+        icon: '✎',
+        /* No `roles`: every staff role can message every other. */
+        description: 'Direct messages with colleagues and your own customers.',
+      },
+      {
         label: 'Your Profile',
         to: '/admin/profile',
         icon: '☺',
@@ -357,6 +370,12 @@ export const FIELD_NAV: NavItem[] = [
     to: '/field/logging',
     icon: '⛭',
     description: 'Geotagged photos, serial-number scanning and consumed-material logging.',
+  },
+  {
+    label: 'Messages',
+    to: '/field/messages',
+    icon: '✎',
+    description: 'Reach the office or the customer whose roof you are standing on.',
   },
   {
     label: 'Account',
