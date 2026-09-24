@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '@/app/auth/useAuth'
+import { Avatar } from '@/components/ui/Avatar'
 import { useOfflineQueue } from '@/lib/queries/field'
 import { FIELD_NAV } from '@/app/navigation'
 import { useCompany } from '@/lib/queries/public-site'
@@ -40,7 +41,11 @@ export function FieldLayout() {
             </div>
             <div style={{ fontWeight: 700 }}>{user?.fullName}</div>
           </div>
-          <span className="avatar">{user?.avatarInitials}</span>
+          <Avatar
+            initials={user?.avatarInitials ?? '??'}
+            url={user?.avatarUrl}
+            name={user?.fullName}
+          />
         </div>
 
         {(pending > 0 || !isOnline) && (

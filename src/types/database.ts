@@ -1439,6 +1439,7 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           avatar_initials: string | null
+          avatar_url: string | null
           created_at: string
           email: string
           full_name: string
@@ -1456,6 +1457,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           avatar_initials?: string | null
+          avatar_url?: string | null
           created_at?: string
           email: string
           full_name: string
@@ -1473,6 +1475,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           avatar_initials?: string | null
+          avatar_url?: string | null
           created_at?: string
           email?: string
           full_name?: string
@@ -2926,6 +2929,18 @@ export type Database = {
       current_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      estimator_settings_readable: {
+        Args: never
+        Returns: {
+          is_public: boolean
+          key: string
+        }[]
+      }
+      grant_admin: { Args: { p_email: string }; Returns: string }
+      grant_staff_role: {
+        Args: { p_email: string; p_role: string }
+        Returns: string
       }
       has_role: {
         Args: { roles: Database["public"]["Enums"]["user_role"][] }

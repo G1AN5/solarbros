@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { Logo } from './Logo'
+import { Avatar } from '@/components/ui/Avatar'
 import { useAuth } from '@/app/auth/useAuth'
 import { ROLE_LABEL } from '@/lib/labels'
 import { useConsoleSearch } from '@/lib/queries/search'
@@ -161,7 +162,11 @@ export function ConsoleLayout({ nav, portalName }: ConsoleLayoutProps) {
 
         <div className="sidebar__footer">
           <div className="row" style={{ marginBottom: 'var(--space-3)' }}>
-            <span className="avatar">{user?.avatarInitials}</span>
+            <Avatar
+              initials={user?.avatarInitials ?? '??'}
+              url={user?.avatarUrl}
+              name={user?.fullName}
+            />
             <div style={{ minWidth: 0 }}>
               <div className="small" style={{ color: 'var(--white)', fontWeight: 600 }}>
                 {user?.fullName}
@@ -247,7 +252,11 @@ export function ConsoleLayout({ nav, portalName }: ConsoleLayoutProps) {
             <button className="btn btn--ghost btn--sm" title="Notifications">
               ◉ <span className="sr-only">Notifications</span>
             </button>
-            <span className="avatar">{user?.avatarInitials}</span>
+            <Avatar
+              initials={user?.avatarInitials ?? '??'}
+              url={user?.avatarUrl}
+              name={user?.fullName}
+            />
           </div>
         </header>
 

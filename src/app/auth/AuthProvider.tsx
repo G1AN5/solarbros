@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function loadProfile(client: NonNullable<typeof supabase>, id: string) {
       const { data, error } = await client
         .from('profiles')
-        .select('id, full_name, email, role, avatar_initials')
+        .select('id, full_name, email, role, avatar_initials, avatar_url, phone, address')
         .eq('id', id)
         .maybeSingle()
 
@@ -133,6 +133,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: authUser?.email ?? '',
           role: 'client',
           avatarInitials: '??',
+          avatarUrl: null,
+          phone: null,
+          address: null,
         })
         setStatus('authenticated')
         if (import.meta.env.DEV && error) {
@@ -147,6 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: data.email,
         role: data.role,
         avatarInitials: data.avatar_initials ?? '??',
+        avatarUrl: data.avatar_url ?? null,
+        phone: data.phone ?? null,
+        address: data.address ?? null,
       })
       setStatus('authenticated')
     }
@@ -277,6 +283,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? readableError(error.message) : null }
   }, [])
 
+  /* Re-reads the profile row on demand. The effect above runs only when the
+     signed-in user CHANGES, which never happens when somebody edits their own
+     name — so without this the sidebar keeps showing the old one. */
+  const refreshProfile = useCallback(async () => {
+    if (!supabase || !userId) return
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, role, avatar_initials, avatar_url, phone, address')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!data) return
+
+    setUser({
+      id: data.id,
+      fullName: data.full_name,
+      email: data.email,
+      role: data.role,
+      avatarInitials: data.avatar_initials ?? '??',
+      avatarUrl: data.avatar_url ?? null,
+      phone: data.phone ?? null,
+      address: data.address ?? null,
+    })
+  }, [userId])
+
   const value = useMemo<AuthState>(
     () => ({
       user,
@@ -288,8 +320,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestPasswordReset,
       verifyResetCode,
       updatePassword,
+      refreshProfile,
     }),
-    [user, status, signIn, signUp, signOut, requestPasswordReset, verifyResetCode, updatePassword],
+    [
+      user,
+      status,
+      signIn,
+      signUp,
+      signOut,
+      requestPasswordReset,
+      verifyResetCode,
+      updatePassword,
+      refreshProfile,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

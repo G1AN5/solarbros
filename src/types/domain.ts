@@ -39,7 +39,12 @@ export interface User {
   fullName: string
   email: string
   role: UserRole
+  /** Fallback shown whenever there is no photo, which is most accounts. */
   avatarInitials: string
+  /** Public URL of the profile photo, or null. */
+  avatarUrl: string | null
+  phone: string | null
+  address: string | null
 }
 
 /* --- CRM: leads & pipeline --------------------------------------------------- */

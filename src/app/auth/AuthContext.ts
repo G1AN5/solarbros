@@ -67,6 +67,15 @@ export interface AuthState {
 
   /** Sets a new password for the session established by a code or a link. */
   updatePassword: (password: string) => Promise<AuthResult>
+
+  /**
+   * Re-read the signed-in user's profile row.
+   *
+   * The profile is loaded once when the session appears, so editing your own
+   * name or photo would otherwise leave the old one in the sidebar and the top
+   * bar until the next full reload — which reads as the save having failed.
+   */
+  refreshProfile: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthState | null>(null)

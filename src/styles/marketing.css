@@ -293,6 +293,27 @@
   flex-shrink: 0;
 }
 
+/* A photograph in the same circle the initials occupied, so swapping one for
+   the other never shifts the layout by a pixel. `cover` because people upload
+   whatever their phone took, and letterboxing a face inside a circle looks far
+   worse than cropping it. */
+.avatar--photo {
+  object-fit: cover;
+  background: var(--ink-100);
+}
+
+.avatar--sm {
+  width: 28px;
+  height: 28px;
+  font-size: var(--text-xs);
+}
+
+.avatar--lg {
+  width: 72px;
+  height: 72px;
+  font-size: var(--text-xl);
+}
+
 /* --- FAQ accordion ---------------------------------------------------------------------- */
 
 .faq__item {

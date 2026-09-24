@@ -144,6 +144,12 @@ export const CLIENT_NAV: NavGroup[] = [
         icon: '◉',
         description: 'Milestone alerts and appointment reminders (in-app / email / SMS).',
       },
+      {
+        label: 'Your Profile',
+        to: '/portal/profile',
+        icon: '☺',
+        description: 'Your name, contact details and photo.',
+      },
     ],
   },
 ]
@@ -314,6 +320,14 @@ export const ADMIN_NAV: NavGroup[] = [
         icon: '☰',
         roles: ['admin'],
         description: 'Immutable record of privileged actions, for compliance review.',
+      },
+      {
+        label: 'Your Profile',
+        to: '/admin/profile',
+        icon: '☺',
+        /* No `roles`, so every staff role gets it. Everybody has a name and a
+           face, whatever they are allowed to read. */
+        description: 'Your name, contact details and photo.',
       },
     ],
   },
