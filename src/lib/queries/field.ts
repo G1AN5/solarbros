@@ -14,6 +14,7 @@ import {
   type ActionHandlers,
 } from '@/lib/offline-queue'
 import { readableDbError, throwReadable } from '@/lib/db-error'
+import { leakedPasswordProblem } from '@/lib/password-check'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import { splitHours } from '@/lib/work-hours'
 import type { Appointment, Project } from '@/types/domain'
@@ -778,6 +779,8 @@ export function useChangePassword() {
   return useMutation({
     networkMode: 'online',
     mutationFn: async (input: { password: string }) => {
+      const leaked = await leakedPasswordProblem(input.password)
+      if (leaked) throw new Error(leaked)
       const { error } = await client().auth.updateUser({ password: input.password })
       if (error) throwReadable(error)
     },

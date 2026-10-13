@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type { Session } from '@supabase/supabase-js'
 
 import { AuthContext, type AuthState, type AuthStatus, type SignUpInput } from './AuthContext'
+import { leakedPasswordProblem } from '@/lib/password-check'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@/types/domain'
 
@@ -189,6 +190,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(async (input: SignUpInput) => {
     if (!supabase) return { error: NOT_CONFIGURED, needsEmailConfirmation: false }
 
+    // Breached passwords are refused here because Supabase's own check needs
+    // the Pro plan. See lib/password-check.ts.
+    const leaked = await leakedPasswordProblem(input.password)
+    if (leaked) return { error: leaked, needsEmailConfirmation: false }
+
     const { data, error } = await supabase.auth.signUp({
       email: input.email.trim(),
       password: input.password,
@@ -279,6 +285,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const updatePassword = useCallback(async (password: string) => {
     if (!supabase) return { error: null }
+    const leaked = await leakedPasswordProblem(password)
+    if (leaked) return { error: leaked }
     const { error } = await supabase.auth.updateUser({ password })
     return { error: error ? readableError(error.message) : null }
   }, [])

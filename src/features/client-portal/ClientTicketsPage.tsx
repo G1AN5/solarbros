@@ -77,6 +77,10 @@ export function ClientTicketsPage() {
         description: String(form.get('description') ?? ''),
         category: String(form.get('category') ?? 'other') as TicketCategory,
         priority: String(form.get('priority') ?? 'normal') as TicketPriority,
+        /* The installation it is about. Without it, a repair visit booked from
+           this ticket had no project, and the technician sent could record
+           nothing against the system they came to fix (0078). */
+        projectId: project?.id,
       },
       {
         onSuccess: async (ticket) => {
