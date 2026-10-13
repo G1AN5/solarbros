@@ -88,10 +88,19 @@ export function BlogPage() {
             </Card>
           </Link>
 
-          <div className="grid" style={{ marginTop: 'var(--space-8)' }}>
+          {/* Each article with its cover, in centred rows of equal width — text-only
+              cards under a photographic lead read as an unfinished page. */}
+          <div
+            className="gallery"
+            // Three to a row exactly spanning the featured article above them.
+            style={
+              { marginTop: 'var(--space-8)', '--gallery-item': '380px' } as React.CSSProperties
+            }
+          >
             {rest.map((post) => (
               <Link key={post.slug} to={`/blog/${post.slug}`}>
-                <Card interactive>
+                <Card interactive className="portfolio-item" style={{ height: '100%' }}>
+                  <MediaCover path={post.coverPath} alt={post.title} />
                   <CardBody>
                     <div className="row">
                       <span className="badge badge--neutral">{post.category}</span>

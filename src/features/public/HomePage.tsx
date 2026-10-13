@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 
 import { ButtonLink } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
-import { MediaCover } from '@/components/ui/MediaCover'
+import { PortfolioCard } from '@/components/ui/PortfolioCard'
 import { BrandMarquee } from '@/components/ui/BrandMarquee'
 import { CountUp } from '@/components/ui/CountUp'
 import { Reveal } from '@/components/ui/Reveal'
@@ -67,14 +67,17 @@ function buildProcess(installDays: number) {
 
 const PAYMENT_OPTIONS = [
   {
+    icon: '🗓️',
     title: 'Staged payments',
     body: 'Down payment, delivery milestone, then commissioning. You pay as work completes.',
   },
   {
+    icon: '🏦',
     title: 'Bank financing',
     body: '12–36 month terms through our partner banks, with assistance on the application.',
   },
   {
+    icon: '🤝',
     title: 'In-house instalment',
     body: 'Flexible terms for qualified residential clients, arranged directly with us.',
   },
@@ -257,7 +260,11 @@ export function HomePage() {
             </div>
           </Reveal>
 
-          <Reveal stagger className="grid grid--2">
+          <Reveal
+            stagger
+            className="gallery"
+            style={{ '--gallery-item': '340px' } as React.CSSProperties}
+          >
             {PACKAGES.filter((p) => p.segment === 'residential').map((pkg) => (
               <Card key={pkg.id} accent={pkg.featured} interactive>
                 <div className={`pkg${pkg.featured ? ' pkg--featured' : ''}`}>
@@ -309,9 +316,9 @@ export function HomePage() {
           </Reveal>
 
           <Reveal stagger>
-            <div className="grid" style={{ '--col-min': '230px' } as React.CSSProperties}>
+            <div className="grid" style={{ '--col-min': '300px' } as React.CSSProperties}>
               {PROCESS.map((step, i) => (
-                <div key={step.title} className="step">
+                <div key={step.title} className="step step--card" data-step={i + 1}>
                   <div className="step__num">{i + 1}</div>
                   <h4>{step.title}</h4>
                   <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
@@ -348,20 +355,9 @@ export function HomePage() {
             </Reveal>
 
             <Reveal stagger>
-              <div className="grid">
+              <div className="gallery">
                 {PORTFOLIO.slice(0, 3).map((project) => (
-                  <Card key={project.id} interactive className="portfolio-item">
-                    <MediaCover path={project.coverPath} alt={project.title} />
-                    <CardBody>
-                      <div className="row row--between">
-                        <h4>{project.title}</h4>
-                        <span className="badge badge--brand">{project.systemSize}</span>
-                      </div>
-                      <p className="small muted" style={{ marginTop: 'var(--space-1)' }}>
-                        {project.location} · {project.segment} · {project.year}
-                      </p>
-                    </CardBody>
-                  </Card>
+                  <PortfolioCard key={project.id} item={project} />
                 ))}
               </div>
             </Reveal>
@@ -389,15 +385,17 @@ export function HomePage() {
             </Reveal>
 
             <Reveal stagger>
-              <div className="grid">
+              <div className="gallery" style={{ '--gallery-item': '380px' } as React.CSSProperties}>
                 {REVIEWS.map((review) => (
-                  <Card key={review.id}>
+                  <Card key={review.id} className="review-card">
                     <CardBody>
                       <div className="review__stars" aria-label={`${review.rating} out of 5 stars`}>
                         {'★'.repeat(review.rating)}
                         <span className="dim">{'★'.repeat(5 - review.rating)}</span>
                       </div>
-                      <p className="review__quote">“{review.quote}”</p>
+                      {/* The opening mark is drawn large by `.review__quote::before`;
+                          typing one here as well printed two. */}
+                      <p className="review__quote">{review.quote}”</p>
                       <div className="row">
                         <span className="avatar">
                           {review.displayName
@@ -432,12 +430,22 @@ export function HomePage() {
                 <h2 style={{ marginBlock: 'var(--space-3)' }}>Options that fit your cash flow</h2>
                 <div className="stack">
                   {PAYMENT_OPTIONS.map((option) => (
-                    <Card key={option.title}>
+                    <Card key={option.title} interactive>
                       <CardBody>
-                        <h4>{option.title}</h4>
-                        <p className="small muted" style={{ marginTop: 'var(--space-1)' }}>
-                          {option.body}
-                        </p>
+                        <div
+                          className="row"
+                          style={{ alignItems: 'flex-start', gap: 'var(--space-4)' }}
+                        >
+                          <span className="icon-chip" aria-hidden="true">
+                            {option.icon}
+                          </span>
+                          <div>
+                            <h4>{option.title}</h4>
+                            <p className="small muted" style={{ marginTop: 'var(--space-1)' }}>
+                              {option.body}
+                            </p>
+                          </div>
+                        </div>
                       </CardBody>
                     </Card>
                   ))}

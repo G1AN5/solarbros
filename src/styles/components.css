@@ -322,6 +322,68 @@
   margin-top: var(--space-1);
   max-width: 70ch;
 }
+
+/* The customer's dashboard greets them with the same material as the public
+   site's banners — dark, warm, a sun rising off the right edge — so signing
+   in feels like arriving somewhere rather than opening a spreadsheet. */
+.page-header--hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  align-items: center;
+  padding: var(--space-8);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(90% 140% at 100% 0%, rgba(245, 158, 11, 0.28), transparent 55%),
+    linear-gradient(135deg, var(--ink-950), var(--ink-900) 60%, #2a1a05);
+  box-shadow: var(--shadow-lg);
+  color: var(--white);
+}
+.page-header--hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  right: -130px;
+  width: 340px;
+  height: 340px;
+  margin-top: -170px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      rgba(253, 230, 138, 0.9) 0 12%,
+      rgba(251, 191, 36, 0.45) 14%,
+      rgba(245, 158, 11, 0.12) 24%,
+      transparent 34%
+    ),
+    repeating-conic-gradient(rgba(251, 191, 36, 0.12) 0deg 5deg, transparent 5deg 15deg);
+  -webkit-mask-image: radial-gradient(circle, #000 30%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 30%, transparent 70%);
+  pointer-events: none;
+}
+.page-header--hero .page-header__title {
+  color: var(--white);
+  font-size: var(--text-3xl);
+  letter-spacing: -0.03em;
+}
+.page-header--hero .page-header__desc {
+  color: var(--ink-300);
+}
+/* The action button sits on dark glass rather than as a white outline box —
+   dark enough that the sun glowing behind it never washes out its label. */
+.page-header--hero .btn--outline {
+  position: relative;
+  background: rgba(2, 6, 23, 0.6);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--white);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.page-header--hero .btn--outline:hover:not(:disabled) {
+  background: rgba(2, 6, 23, 0.75);
+  border-color: var(--brand-400);
+}
 .breadcrumb {
   display: flex;
   gap: var(--space-2);

@@ -41,6 +41,10 @@ export interface CompanyProfile {
   /* A hybrid system is most of what this company sells and the battery had no
      warranty figure at all — only panels, inverter and workmanship. */
   warrantyBatteryYears: number
+  /** The staged payment split every contract is invoiced by. */
+  downPaymentPct: number
+  deliveryPct: number
+  commissioningPct: number
   /** The two sentences at the top of the home page. */
   heroHeadline: string
   heroSubhead: string
@@ -114,6 +118,9 @@ export function useCompany(): CompanyProfile {
     warrantyInverterYears: settingNum(settings, 'warranty.inverter_years', 10),
     warrantyWorkmanshipYears: settingNum(settings, 'warranty.workmanship_years', 2),
     warrantyBatteryYears: settingNum(settings, 'warranty.battery_years', 8),
+    downPaymentPct: settingNum(settings, 'finance.down_payment_pct', 50),
+    deliveryPct: settingNum(settings, 'finance.delivery_pct', 35),
+    commissioningPct: settingNum(settings, 'finance.commissioning_pct', 15),
 
     /* The most important sentence on the site was compiled into the bundle, so
        changing it needed a developer and a deploy. The fallbacks are the words

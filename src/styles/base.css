@@ -58,9 +58,18 @@ h3,
 h4,
 h5,
 h6 {
+  font-family: var(--font-display);
   font-weight: 650;
   line-height: 1.2;
   letter-spacing: -0.015em;
+}
+
+/* Large figures read as part of the same voice as the headings. */
+.stat__value,
+.trust-strip__value,
+.pkg__price,
+.page-banner__stat strong {
+  font-family: var(--font-display);
 }
 
 h1 {

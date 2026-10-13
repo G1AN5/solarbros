@@ -1,8 +1,7 @@
 import { useState } from 'react'
 
 import { ButtonLink } from '@/components/ui/Button'
-import { Card, CardBody } from '@/components/ui/Card'
-import { MediaCover } from '@/components/ui/MediaCover'
+import { PortfolioCard } from '@/components/ui/PortfolioCard'
 import { usePortfolio } from '@/lib/queries/content'
 import { PageBanner } from '@/components/layout/PageBanner'
 
@@ -55,25 +54,23 @@ export function PortfolioPage() {
             ))}
           </div>
 
-          <div className="grid">
-            {visible.map((item) => (
-              <Card key={item.id} interactive className="portfolio-item">
-                <MediaCover path={item.coverPath} alt={item.title} />
-                <CardBody>
-                  <div className="row row--between">
-                    <h4>{item.title}</h4>
-                    <span className="badge badge--brand">{item.systemSize}</span>
-                  </div>
-                  <p className="small muted" style={{ marginTop: 'var(--space-1)' }}>
-                    {item.location}
-                  </p>
-                  <p className="xs dim" style={{ marginTop: 'var(--space-2)' }}>
-                    {item.segment} · Completed {item.year}
-                  </p>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
+          {visible.length > 0 ? (
+            <div className="gallery">
+              {visible.map((item) => (
+                <PortfolioCard key={item.id} item={item} />
+              ))}
+            </div>
+          ) : (
+            /* A filter with nothing in it said nothing at all — an empty band
+               under the buttons, which reads as a broken page. */
+            <p className="muted center" style={{ marginInline: 'auto' }}>
+              {portfolioQuery.isLoading
+                ? 'Loading projects…'
+                : filter === 'All'
+                  ? 'Completed projects will appear here soon.'
+                  : `No ${filter.toLowerCase()} projects to show yet — see all projects instead.`}
+            </p>
+          )}
 
           <div className="center" style={{ marginTop: 'var(--space-12)' }}>
             <p className="muted" style={{ marginBottom: 'var(--space-4)' }}>

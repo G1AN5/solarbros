@@ -88,7 +88,7 @@ export function ClientDashboardPage() {
   if (projectQuery.isLoading || projectQuery.error) {
     return (
       <>
-        <PageHeader title={`Welcome back, ${firstName}`} />
+        <PageHeader hero title={`Welcome back, ${firstName}`} />
         <QueryState isLoading={projectQuery.isLoading} error={projectQuery.error as Error | null}>
           {null}
         </QueryState>
@@ -156,6 +156,7 @@ export function ClientDashboardPage() {
     return (
       <>
         <PageHeader
+          hero
           title={`Welcome, ${firstName}`}
           description="Where your solar journey stands, and anything waiting on you."
           actions={
@@ -227,6 +228,7 @@ export function ClientDashboardPage() {
   return (
     <>
       <PageHeader
+        hero
         title={`Welcome back, ${firstName}`}
         description="Here is where your solar installation stands today."
         actions={

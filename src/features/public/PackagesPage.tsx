@@ -80,7 +80,8 @@ export function PackagesPage() {
           // From Settings, like the home page — it said 25 here whatever the
           // company had actually published.
           { value: `${company.warrantyPanelYears} yrs`, label: 'Panel warranty' },
-          { value: '3 days', label: 'Typical install' },
+          // From Settings too; it said 3 here while the home page said 2.
+          { value: `${company.installDays} days`, label: 'Typical install' },
         ]}
       />
 
@@ -117,9 +118,11 @@ export function PackagesPage() {
 
           {/* ------------------------------------------------ CARD VIEW */}
           {view === 'cards' && (
-            <div className="grid grid--2">
+            // A centred gallery: five packages in a three-column grid left the
+            // last row hanging off to the left with an empty slot beside it.
+            <div className="gallery" style={{ '--gallery-item': '340px' } as React.CSSProperties}>
               {visible.map((pkg) => (
-                <Card key={pkg.id} accent={pkg.featured}>
+                <Card key={pkg.id} accent={pkg.featured} interactive>
                   <div className={`pkg${pkg.featured ? ' pkg--featured' : ''}`}>
                     <div>
                       <span className="badge badge--neutral">

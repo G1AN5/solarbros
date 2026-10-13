@@ -92,7 +92,7 @@ export function BlogPostPage() {
         )}
 
         <div
-          className="stack"
+          className="stack article-body"
           style={{ marginTop: 'var(--space-8)', fontSize: 'var(--text-md)', lineHeight: 1.7 }}
         >
           {post.body?.trim() ? (

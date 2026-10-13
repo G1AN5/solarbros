@@ -157,6 +157,9 @@
 .pkg {
   display: flex;
   flex-direction: column;
+  /* Fills its card, so "See full inclusions" sits on the same line in every
+     card of a row however long the description above it runs. */
+  height: 100%;
   padding: var(--space-6);
   gap: var(--space-4);
 }
@@ -222,6 +225,93 @@
   position: relative;
   padding-top: var(--space-6);
 }
+/* The home page's steps as cards, each with its number set large and faint
+   in the corner — six bare paragraphs on grey read as a list nobody would
+   stop to look at. */
+.step--card {
+  overflow: hidden;
+  padding: var(--space-6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  transition:
+    translate var(--transition),
+    box-shadow var(--transition),
+    border-color var(--transition);
+}
+.step--card:hover {
+  translate: 0 -3px;
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-200);
+}
+.step--card::after {
+  content: attr(data-step);
+  position: absolute;
+  top: -0.2em;
+  right: 0.15em;
+  font-family: var(--font-display);
+  font-size: 6rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--brand-100);
+  pointer-events: none;
+}
+.step--card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* The How It Works stages, joined by a line through their numbers. The line
+   runs behind the cards and shows in the gaps between them, which is all it
+   needs to do to make seven cards read as one path. */
+.timeline-steps {
+  position: relative;
+  isolation: isolate;
+}
+.timeline-steps::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: var(--space-8);
+  bottom: var(--space-8);
+  /* The centre of the 44px number, inside the card body's padding. */
+  left: calc(var(--space-5) + 21px);
+  width: 2px;
+  background: linear-gradient(var(--brand-400), var(--brand-200) 70%, var(--eco-300));
+}
+.timeline-steps > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Payment stages: the percentage large, in the heading face. */
+.pay-stage__pct {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--brand-600);
+}
+
+/* A soft amber disc holding one symbol — payment options, features. */
+.icon-chip {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--brand-50), var(--brand-100));
+  border: 1px solid var(--brand-200);
+  font-size: 1.25rem;
+}
+
+/* Reviews: a warm rule along the top, so a single quote still reads as a
+   deliberate feature rather than a lone box. */
+.review-card {
+  border-top: 3px solid var(--brand-400);
+}
 .step__num {
   display: grid;
   place-items: center;
@@ -245,6 +335,8 @@
    grey box: it stays on-brand so a half-populated gallery still looks
    deliberate rather than broken. */
 .portfolio-item__media {
+  position: relative;
+  overflow: hidden;
   aspect-ratio: 16 / 10;
   background:
     radial-gradient(70% 70% at 30% 20%, rgba(245, 158, 11, 0.3), transparent 60%),
@@ -254,10 +346,188 @@
   color: rgba(255, 255, 255, 0.55);
   font-size: var(--text-sm);
 }
+/* Absolutely placed, so the photo fills the frame instead of setting its
+   height: as an ordinary grid item a tall image overrode the aspect ratio and
+   stretched the cover to its own proportions. */
 .portfolio-item__media img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* --- Article body ---------------------------------------------------------------------
+   The reset in base.css strips list markers everywhere, which is right for
+   menus and wrong for prose: an article's bullet points ran together as loose
+   lines. Restored inside articles only. */
+
+.article-body ul,
+.article-body ol {
+  padding-left: 1.4em;
+}
+.article-body ul {
+  list-style: disc;
+}
+.article-body ol {
+  list-style: decimal;
+}
+.article-body li {
+  padding-left: 0.2em;
+}
+.article-body li + li {
+  margin-top: var(--space-1);
+}
+.article-body li::marker {
+  color: var(--brand-500);
+  font-weight: 700;
+}
+
+/* --- Galleries ----------------------------------------------------------------------
+   Portfolio, reviews, packages and articles. `.grid` auto-fits, so a single card
+   took the whole row — one portfolio entry became a banner a screen wide. A
+   gallery keeps every card the same width and centres a short last row. */
+
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-6);
+}
+.gallery > * {
+  flex: 0 1 var(--gallery-item, 360px);
+  min-width: 0;
+}
+
+/* --- Portfolio card ------------------------------------------------------------------ */
+
+.pf-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  color: var(--text-primary);
+  transition:
+    translate var(--transition-slow),
+    box-shadow var(--transition-slow),
+    border-color var(--transition-slow);
+}
+.pf-card:hover {
+  translate: 0 -4px;
+  box-shadow: var(--shadow-lg);
+  border-color: var(--brand-300);
+}
+.pf-card__media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background:
+    radial-gradient(70% 70% at 30% 20%, rgba(245, 158, 11, 0.3), transparent 60%),
+    linear-gradient(135deg, var(--ink-800), var(--ink-900));
+}
+.pf-card__media img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: scale 600ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+.pf-card:hover .pf-card__media img {
+  scale: 1.05;
+}
+/* A shade along the bottom edge, so the size chip reads on any photograph. */
+.pf-card__media::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 45%;
+  background: linear-gradient(to top, rgba(2, 6, 23, 0.55), transparent);
+  pointer-events: none;
+}
+.pf-card__segment,
+.pf-card__size {
+  position: absolute;
+  z-index: 1;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.pf-card__segment {
+  top: var(--space-3);
+  left: var(--space-3);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink-900);
+}
+.pf-card__size {
+  bottom: var(--space-3);
+  left: var(--space-3);
+  background: var(--brand-500);
+  color: var(--ink-950);
+  box-shadow: var(--shadow-brand);
+}
+.pf-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+}
+/* Two classes deep on purpose: `.section--dark h3` and `.section--dark p`
+   would otherwise win, and a white title on a white card is exactly how the
+   project's name disappeared from the home page. */
+.pf-card .pf-card__title {
+  font-size: var(--text-lg);
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+.pf-card .pf-card__meta {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.pf-card .pf-card__summary {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* On a dark section the card turns to glass rather than a white slab. */
+.section--dark .pf-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+.section--dark .pf-card:hover {
+  border-color: rgba(251, 191, 36, 0.5);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+}
+.section--dark .pf-card .pf-card__title {
+  color: var(--white);
+}
+.section--dark .pf-card .pf-card__meta {
+  color: var(--ink-300);
+}
+.section--dark .pf-card .pf-card__summary {
+  color: var(--ink-400);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-card,
+  .pf-card__media img {
+    transition: none;
+  }
+  .pf-card:hover,
+  .pf-card:hover .pf-card__media img {
+    translate: none;
+    scale: none;
+  }
 }
 
 /* --- Testimonials --------------------------------------------------------------------- */
@@ -681,6 +951,49 @@
   background-size: 48px 48px;
   mask-image: radial-gradient(75% 80% at 60% 10%, #000 25%, transparent 80%);
   pointer-events: none;
+}
+/* A sun rising behind the banner's right edge — a disc and a ring of rays,
+   drawn with gradients like the rest of the banner, so it costs no download.
+   It turns slowly; anyone who prefers less motion gets it still. */
+.page-banner::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  right: -140px;
+  width: 560px;
+  height: 560px;
+  margin-top: -280px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      rgba(253, 230, 138, 0.95) 0 13%,
+      rgba(251, 191, 36, 0.55) 15%,
+      rgba(245, 158, 11, 0.16) 24%,
+      transparent 34%
+    ),
+    repeating-conic-gradient(rgba(251, 191, 36, 0.14) 0deg 5deg, transparent 5deg 15deg);
+  -webkit-mask-image: radial-gradient(circle, #000 30%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 30%, transparent 70%);
+  animation: banner-sun 140s linear infinite;
+  pointer-events: none;
+}
+@keyframes banner-sun {
+  to {
+    rotate: 360deg;
+  }
+}
+@media (max-width: 800px) {
+  .page-banner::after {
+    opacity: 0.35;
+    right: -260px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-banner::after {
+    animation: none;
+  }
 }
 .page-banner__eyebrow {
   display: inline-block;

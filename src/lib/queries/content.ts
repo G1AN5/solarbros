@@ -69,6 +69,10 @@ export function usePortfolio(publishedOnly = true) {
         .from('portfolio_items')
         .select('*')
         .order('sort_order', { ascending: true })
+        // Every entry is saved with sort_order 0, and ties came back in no
+        // particular order — so which three the home page showed could change
+        // from one load to the next. Newest first among equals.
+        .order('created_at', { ascending: false })
 
       // The editor needs to see drafts; the public site must not.
       if (publishedOnly) query = query.eq('published', true)

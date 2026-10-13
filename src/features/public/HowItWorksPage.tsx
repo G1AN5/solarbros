@@ -64,28 +64,60 @@ function buildStages(installDays: number) {
   ]
 }
 
+/* The percentages come from Business Settings — the same figures every
+   contract is invoiced by — rather than being written into the page. */
+function buildPaymentStages(company: {
+  downPaymentPct: number
+  deliveryPct: number
+  commissioningPct: number
+}) {
+  return [
+    {
+      title: 'Down payment',
+      pct: company.downPaymentPct,
+      body: 'On contract signing. Releases the equipment reservation and starts the permitting work.',
+    },
+    {
+      title: 'Delivery',
+      pct: company.deliveryPct,
+      body: 'When panels, inverter and racking arrive on site, before installation begins.',
+    },
+    {
+      title: 'Commissioning',
+      pct: company.commissioningPct,
+      body: 'Only after the system is tested, working and you have signed the turnover certificate.',
+    },
+  ]
+}
+
 const AFTER_SALES = [
   {
+    icon: '🖥️',
     title: 'Client portal',
     body: 'Track your project live, download documents and raise tickets without phoning anyone.',
   },
   {
+    icon: '🎫',
     title: 'Support ticketing',
     body: 'Report a fault with photos. We route it to a technician and you watch the resolution progress.',
   },
   {
+    icon: '🧰',
     title: 'Preventive maintenance',
     body: 'Annual check-ups: panel cleaning, connection torque check, inverter log review.',
   },
   {
+    icon: '🔁',
     title: 'Warranty transfers',
     body: 'Selling the property? Transfer the warranty to the new owner from inside your portal.',
   },
   {
+    icon: '⚡',
     title: 'System expansion',
     body: 'Added an aircon or an EV? Request an upgrade and we size the extension against your existing array.',
   },
   {
+    icon: '📈',
     title: 'Monitoring',
     body: 'Live production data on your phone, with alerts if output drops unexpectedly.',
   },
@@ -94,6 +126,7 @@ const AFTER_SALES = [
 export function HowItWorksPage() {
   const COMPANY = useCompany()
   const STAGES = buildStages(COMPANY.installDays)
+  const PAYMENT_STAGES = buildPaymentStages(COMPANY)
 
   return (
     <>
@@ -110,8 +143,10 @@ export function HowItWorksPage() {
 
       <div className="section section--muted">
         <div className="container">
-          {/* Stage list. Each card names the portal milestone it corresponds to. */}
-          <div className="stack" style={{ maxWidth: 860, marginInline: 'auto' }}>
+          {/* Stage list. Each card names the portal milestone it corresponds to.
+              `timeline-steps` runs a line through the numbers, so seven cards
+              read as one journey rather than seven unrelated boxes. */}
+          <div className="stack timeline-steps" style={{ maxWidth: 860, marginInline: 'auto' }}>
             {STAGES.map((stage, i) => (
               <Card key={stage.title}>
                 <CardBody>
@@ -148,35 +183,20 @@ export function HowItWorksPage() {
             </div>
 
             <div className="grid">
-              <Card>
-                <CardBody>
-                  <span className="badge badge--brand">Stage 1</span>
-                  <h4 style={{ marginTop: 'var(--space-2)' }}>Down payment — 50%</h4>
-                  <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
-                    On contract signing. Releases the equipment reservation and starts the
-                    permitting work.
-                  </p>
-                </CardBody>
-              </Card>
-              <Card>
-                <CardBody>
-                  <span className="badge badge--brand">Stage 2</span>
-                  <h4 style={{ marginTop: 'var(--space-2)' }}>Delivery — 35%</h4>
-                  <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
-                    When panels, inverter and racking arrive on site, before installation begins.
-                  </p>
-                </CardBody>
-              </Card>
-              <Card>
-                <CardBody>
-                  <span className="badge badge--brand">Stage 3</span>
-                  <h4 style={{ marginTop: 'var(--space-2)' }}>Commissioning — 15%</h4>
-                  <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
-                    Only after the system is tested, working and you have signed the turnover
-                    certificate.
-                  </p>
-                </CardBody>
-              </Card>
+              {PAYMENT_STAGES.map((stage, i) => (
+                <Card key={stage.title} className="pay-stage">
+                  <CardBody>
+                    <div className="row row--between">
+                      <span className="badge badge--brand">Stage {i + 1}</span>
+                      <span className="pay-stage__pct">{stage.pct}%</span>
+                    </div>
+                    <h4 style={{ marginTop: 'var(--space-2)' }}>{stage.title}</h4>
+                    <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
+                      {stage.body}
+                    </p>
+                  </CardBody>
+                </Card>
+              ))}
             </div>
 
             <p className="center muted" style={{ marginTop: 'var(--space-6)' }}>
@@ -193,11 +213,14 @@ export function HowItWorksPage() {
               <p>The relationship starts at turnover — it does not end there.</p>
             </div>
 
-            <div className="grid">
+            <div className="gallery" style={{ '--gallery-item': '340px' } as React.CSSProperties}>
               {AFTER_SALES.map((item) => (
-                <Card key={item.title}>
+                <Card key={item.title} interactive>
                   <CardBody>
-                    <h4>{item.title}</h4>
+                    <span className="icon-chip" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    <h4 style={{ marginTop: 'var(--space-4)' }}>{item.title}</h4>
                     <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
                       {item.body}
                     </p>

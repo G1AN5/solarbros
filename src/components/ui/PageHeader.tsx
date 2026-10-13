@@ -18,11 +18,14 @@ interface PageHeaderProps {
   breadcrumbs?: Crumb[]
   /** Buttons / filters aligned to the right of the title. */
   actions?: ReactNode
+  /** A branded banner instead of a plain title — for the customer's dashboard,
+   *  the first screen they see after signing in. */
+  hero?: boolean
 }
 
-export function PageHeader({ title, description, breadcrumbs, actions }: PageHeaderProps) {
+export function PageHeader({ title, description, breadcrumbs, actions, hero }: PageHeaderProps) {
   return (
-    <header className="page-header">
+    <header className={hero ? 'page-header page-header--hero' : 'page-header'}>
       <div>
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav className="breadcrumb" aria-label="Breadcrumb">
