@@ -15,6 +15,7 @@ import {
   type Permit,
   type PermitStatus,
   type PermitType,
+  isWorkPermit,
   useCreatePermit,
   useCreatePermitSet,
   useDeletePermit,
@@ -56,9 +57,11 @@ const PERMIT_TYPE_LABEL: Record<PermitType, string> = {
 }
 
 const PERMIT_TYPE_HINT: Record<PermitType, string> = {
-  lgu_building: 'City or municipal hall. Usually the longest lead time.',
-  electrical: 'Signed off by a licensed electrical engineer, filed with the LGU.',
-  utility_interconnection: 'Meralco or the local distribution utility.',
+  lgu_building: 'City or municipal hall. Usually the longest lead time. Needed before work starts.',
+  electrical:
+    'Signed off by a licensed electrical engineer, filed with the LGU. Needed before work starts.',
+  utility_interconnection:
+    'Meralco or the local distribution utility. Needed before the system is switched on.',
   net_metering: 'Required before the customer can export to the grid.',
   permission_to_operate: 'The final clearance. Nothing may be energised without it.',
 }
@@ -99,6 +102,7 @@ export function PermitsPage() {
   const approved = permits.filter((p) => p.status === 'approved')
   const blocked = permits.filter((p) => p.status === 'rejected')
   const waiting = permits.filter((p) => p.status === 'submitted' || p.status === 'under_review')
+  const unfiled = permits.filter((p) => p.status === 'preparing')
   const fees = permits.reduce((sum, p) => sum + (p.feeAmount ?? 0), 0)
 
   function handleAdd(event: FormEvent<HTMLFormElement>) {
@@ -178,8 +182,16 @@ export function PermitsPage() {
         <StatTile
           label="Awaiting a decision"
           value={String(waiting.length)}
-          delta={waiting.length ? 'Blocking installation' : 'Nothing outstanding'}
-          direction={waiting.length ? 'up' : 'flat'}
+          delta={
+            waiting.length
+              ? waiting.some((p) => isWorkPermit(p.permitType))
+                ? 'Blocking installation'
+                : 'Holding up commissioning'
+              : unfiled.length
+                ? `${unfiled.length} still to file`
+                : 'Nothing outstanding'
+          }
+          direction={waiting.length || unfiled.length ? 'up' : 'flat'}
           invertDelta
         />
         <StatTile label="Rejected" value={String(blocked.length)} />
@@ -407,6 +419,11 @@ export function PermitsPage() {
             Adds the building and electrical permits, the utility interconnection, net metering and
             permission to operate — each as &ldquo;preparing&rdquo;. Any the project already tracks
             are skipped.
+          </p>
+          <p className="small muted">
+            The crew waits for the building and electrical permits. The utility&rsquo;s approvals
+            come after it has inspected the installation, and hold up only the sign-off of
+            commissioning.
           </p>
           <div className="field">
             <label className="field__label" htmlFor="set-project">

@@ -10,6 +10,7 @@ import { useMyAssets } from '@/lib/queries/client-portal'
 import type { SerializedAsset } from '@/types/domain'
 import { FormError } from '@/components/ui/FormError'
 import { useMyProject, useRequestWarrantyTransfer } from '@/lib/queries/client-portal'
+import { useCompany } from '@/lib/queries/public-site'
 import { useClientUpload } from '@/lib/queries/storage'
 
 /* ============================================================================
@@ -33,6 +34,7 @@ import { useClientUpload } from '@/lib/queries/storage'
 export function ClientWarrantyPage() {
   const assetsQuery = useMyAssets()
   const assets = assetsQuery.data ?? []
+  const company = useCompany()
   const [showTransfer, setShowTransfer] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   /* A transfer is against the PROJECT — it moves the whole installation to a
@@ -216,20 +218,24 @@ export function ClientWarrantyPage() {
         </CardBody>
       </Card>
 
-      {/* ------------------------------------------ COVERAGE SUMMARY */}
+      {/* ------------------------------------------ COVERAGE SUMMARY
+          The company's published terms from Settings — the same figures each
+          unit's expiry above was worked out from. These cards were fixed text
+          ("Inverter — 10 years") above a table that, for the same inverter,
+          said five. */}
       <div className="grid">
         <Card>
           <CardBody>
-            <h4>☀️ Panels — 25 years</h4>
+            <h4>☀️ Panels — {company.warrantyPanelYears} years</h4>
             <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
-              Performance warranty guaranteeing at least 80% of rated output at year 25. Product
-              defect warranty runs 12 years.
+              Product warranty on every panel, registered to you by its serial number. The
+              manufacturer&rsquo;s output guarantee is on the panel datasheet; ask your engineer.
             </p>
           </CardBody>
         </Card>
         <Card>
           <CardBody>
-            <h4>⚡ Inverter — 10 years</h4>
+            <h4>⚡ Inverter — {company.warrantyInverterYears} years</h4>
             <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
               Full replacement warranty. Extended terms available; ask your engineer.
             </p>
@@ -237,7 +243,15 @@ export function ClientWarrantyPage() {
         </Card>
         <Card>
           <CardBody>
-            <h4>🔧 Workmanship — 2 years</h4>
+            <h4>🔋 Batteries — {company.warrantyBatteryYears} years</h4>
+            <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
+              Each battery module is covered on its own serial number.
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <h4>🔧 Workmanship — {company.warrantyWorkmanshipYears} years</h4>
             <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
               Covers installation defects, mounting integrity and wiring. Raise a support ticket and
               we come out at no charge.

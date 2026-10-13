@@ -393,6 +393,9 @@ export function HrPayrollPage() {
             </span>
           </div>
 
+          {/* Hundredths, as the column stores them. Quarter-hour steps refused
+              the field log's own figures — "Use these hours" filled in 0.3 and
+              the browser would not submit the form. */}
           <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
             <div className="field" style={{ flex: 1 }}>
               <label className="field__label" htmlFor="pay-reg-hours">
@@ -403,7 +406,7 @@ export function HrPayrollPage() {
                 name="regularHours"
                 className="input"
                 type="number"
-                step="0.25"
+                step="0.01"
                 min="0"
                 defaultValue={editing?.regularHours ?? 0}
                 ref={regularRef}
@@ -418,7 +421,7 @@ export function HrPayrollPage() {
                 name="overtimeHours"
                 className="input"
                 type="number"
-                step="0.25"
+                step="0.01"
                 min="0"
                 defaultValue={editing?.overtimeHours ?? 0}
                 ref={overtimeRef}

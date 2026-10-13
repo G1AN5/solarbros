@@ -62,6 +62,8 @@ export function FieldLoggingPage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [logged, setLogged] = useState<string | null>(null)
   const photoInput = useRef<HTMLInputElement>(null)
+  /** Waiting up to five seconds for a position before a photo is sent. */
+  const [locatingPhoto, setLocatingPhoto] = useState(false)
 
   /* WHICH JOB IS THIS FOR?
      Every one of these three tools writes against a PROJECT — a serial number
@@ -169,51 +171,77 @@ export function FieldLoggingPage() {
     const entries = Object.entries(quantities).filter(([, qty]) => qty > 0)
     if (entries.length === 0) return
 
-    for (const [stockItemId, quantity] of entries) {
-      const item = STOCK.find((s) => s.id === stockItemId)
-      logMaterials.mutate({
-        projectId: activeJob.projectId,
-        stockItemId,
-        itemName: item?.name ?? 'Material',
-        quantity,
-      })
-    }
-    setQuantities({})
-    setExtraLines([])
-    setLogged(`${entries.length} material line(s) logged`)
+    const projectId = activeJob.projectId
+    /* Cleared and confirmed once every line has gone through. Before, the
+       form cleared and said "logged" while the writes were still in flight,
+       so a refused line vanished from the form with a success message. */
+    void Promise.allSettled(
+      entries.map(([stockItemId, quantity]) =>
+        logMaterials.mutateAsync({
+          projectId,
+          stockItemId,
+          itemName: STOCK.find((s) => s.id === stockItemId)?.name ?? 'Material',
+          quantity,
+        }),
+      ),
+    ).then((results) => {
+      // Only the refused lines stay in the form, so sending it again cannot
+      // log the others twice.
+      const failed = new Set(
+        entries.filter((_, index) => results[index].status === 'rejected').map(([id]) => id),
+      )
+      setQuantities((previous) =>
+        Object.fromEntries(Object.entries(previous).filter(([id]) => failed.has(id))),
+      )
+      if (failed.size === 0) {
+        setExtraLines([])
+        setLogged(`${entries.length} material line(s) logged`)
+      } else if (failed.size < entries.length) {
+        setLogged(
+          `${entries.length - failed.size} of ${entries.length} material lines logged — the rest are still in the form`,
+        )
+      }
+    })
   }
 
   function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
-    if (!file || !activeJob?.projectId) return
+    event.target.value = ''
+    const job = activeJob
+    if (!file || !job?.projectId) return
+    const projectId = job.projectId
+    const category = photoCategory
+
+    /* "Uploaded" is said once it has been — it used to be said as the upload
+       began, so a failed one still announced itself as done. */
+    const send = (position?: { latitude: number; longitude: number }) => {
+      setLocatingPhoto(false)
+      uploadPhoto.mutate(
+        { file, projectId, appointmentId: job.id, category, ...position },
+        {
+          onSuccess: () =>
+            setLogged(
+              position ? 'Photo uploaded with location' : 'Photo uploaded (no location available)',
+            ),
+        },
+      )
+    }
 
     /* Geolocation is requested but never waited on indefinitely — a technician
        inside a plant room may never get a fix, and the photo matters more than
-       the coordinates. */
-    navigator.geolocation?.getCurrentPosition(
-      (position) => {
-        uploadPhoto.mutate({
-          file,
-          projectId: activeJob.projectId!,
-          appointmentId: activeJob.id,
-          category: photoCategory,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        })
-        setLogged('Photo uploaded with location')
-      },
-      () => {
-        uploadPhoto.mutate({
-          file,
-          projectId: activeJob.projectId!,
-          appointmentId: activeJob.id,
-          category: photoCategory,
-        })
-        setLogged('Photo uploaded (no location available)')
-      },
+       the coordinates. A browser without it still uploads (it used to do
+       nothing at all). */
+    if (!navigator.geolocation) {
+      send()
+      return
+    }
+    setLocatingPhoto(true)
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        send({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => send(),
       { timeout: 5000 },
     )
-    event.target.value = ''
   }
 
   return (
@@ -329,10 +357,14 @@ export function FieldLoggingPage() {
                 block
                 size="lg"
                 style={{ marginTop: 'var(--space-3)' }}
-                disabled={!activeJob || uploadPhoto.isPending}
+                disabled={!activeJob || locatingPhoto || uploadPhoto.isPending}
                 onClick={() => photoInput.current?.click()}
               >
-                {uploadPhoto.isPending ? 'Uploading…' : '📷 Take photo'}
+                {locatingPhoto
+                  ? 'Finding your location…'
+                  : uploadPhoto.isPending
+                    ? 'Uploading…'
+                    : '📷 Take photo'}
               </Button>
               <p className="xs dim center" style={{ marginTop: 'var(--space-2)' }}>
                 GPS coordinates and timestamp are embedded automatically.
@@ -460,19 +492,29 @@ export function FieldLoggingPage() {
                 ))}
               </div>
 
-              <p
-                className="small"
-                style={{
-                  marginTop: 'var(--space-4)',
-                  padding: 'var(--space-3)',
-                  background: 'var(--warning-bg)',
-                  color: 'var(--warning-fg)',
-                  borderRadius: 'var(--radius)',
-                }}
-              >
-                ⚠ Every panel, inverter and battery must be scanned. A missing serial means the
-                client cannot claim that unit's warranty later.
-              </p>
+              {/* A warning while anything is unscanned; a plain confirmation
+                  once everything on the bill of materials is. It used to warn
+                  at twelve of twelve. */}
+              {serialsExpected > 0 && serials.length >= serialsExpected ? (
+                <p className="small muted" style={{ marginTop: 'var(--space-4)' }}>
+                  ✓ Every serialised unit on this job is recorded — the customer can claim each
+                  one&rsquo;s warranty.
+                </p>
+              ) : (
+                <p
+                  className="small"
+                  style={{
+                    marginTop: 'var(--space-4)',
+                    padding: 'var(--space-3)',
+                    background: 'var(--warning-bg)',
+                    color: 'var(--warning-fg)',
+                    borderRadius: 'var(--radius)',
+                  }}
+                >
+                  ⚠ Every panel, inverter and battery must be scanned. A missing serial means the
+                  client cannot claim that unit's warranty later.
+                </p>
+              )}
             </CardBody>
           </Card>
         </div>

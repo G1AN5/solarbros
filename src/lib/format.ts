@@ -84,6 +84,28 @@ export function yearsUntil(iso: string, from: number = APP_LOADED_AT): number {
   return (new Date(iso).getTime() - from) / MS_PER_YEAR
 }
 
+/**
+ * What is left before `iso`, in calendar months: "5 yrs left", "2 yrs 6 mo
+ * left", "8 mo left". Flooring `yearsUntil` said a five-year warranty
+ * registered that afternoon had "4 yrs left" — it ends at midnight on the
+ * anniversary, a few hours short of five whole years — and anything with
+ * less than a year to run read "0 yrs left".
+ */
+export function timeLeft(iso: string, from: number = APP_LOADED_AT): string {
+  // A bare date is a local calendar date, not midnight UTC.
+  const end = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso)
+  const now = new Date(from)
+  let months = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth())
+  if (end.getDate() < now.getDate()) months -= 1
+
+  if (months < 1) return 'under a month left'
+  const years = Math.floor(months / 12)
+  const rest = months % 12
+  const yearPart = `${years} yr${years === 1 ? '' : 's'}`
+  if (years === 0) return `${rest} mo left`
+  return rest === 0 ? `${yearPart} left` : `${yearPart} ${rest} mo left`
+}
+
 /** Whole days that `iso` is in the past. Negative if it is still in the future. */
 export function daysSince(iso: string, from: number = APP_LOADED_AT): number {
   return Math.floor((from - new Date(iso).getTime()) / 86_400_000)

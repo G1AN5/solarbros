@@ -1,6 +1,7 @@
 import { Badge } from './Badge'
 import { MILESTONE_STATUS_TONE } from '@/lib/labels'
 import { dateTime, humanize } from '@/lib/format'
+import { useStaffNames } from '@/lib/queries/operations'
 import type { Milestone } from '@/types/domain'
 
 /* ============================================================================
@@ -23,6 +24,11 @@ interface TimelineProps {
 }
 
 export function Timeline({ milestones, onToggle }: TimelineProps) {
+  // `completedBy` is an id, and a customer cannot read staff profiles. Names
+  // come from the staff-only lookup (0036) here, in the shared component, so
+  // no screen that renders a timeline can show the id instead.
+  const names = useStaffNames(milestones.map((m) => m.completedBy)).data
+
   return (
     <ol className="timeline">
       {milestones.map((m) => {
@@ -43,7 +49,7 @@ export function Timeline({ milestones, onToggle }: TimelineProps) {
                 {m.completedAt && (
                   <div className="timeline__meta">
                     Completed {dateTime(m.completedAt)}
-                    {m.completedBy && ` · ${m.completedBy}`}
+                    {m.completedBy && names?.[m.completedBy] && ` · ${names[m.completedBy]}`}
                   </div>
                 )}
                 {m.note && (

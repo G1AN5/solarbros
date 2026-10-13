@@ -155,13 +155,20 @@ export function AnalyticsPage() {
     settingNum(settings, 'operations.max_jobs_per_crew_per_day', 3),
   )
 
-  // Pipeline counts, in the canonical stage order.
-  const funnelStages = PIPELINE_ORDER.map((stage) => ({
+  /* A funnel counts the enquiries that REACHED each stage — the ones sitting at
+     it and the ones that went further. Counting only the ones sitting at it
+     made "conversion" a ratio of two snapshots, which read 200% whenever more
+     enquiries were waiting for a site visit than for a quotation. A lost
+     enquiry counts at New only: how far it got before it was lost is not
+     recorded. */
+  const funnelStages = PIPELINE_ORDER.map((stage, index) => ({
     label: LEAD_STAGE_LABEL[stage],
-    count: LEADS.filter((lead) => lead.stage === stage).length,
+    count: LEADS.filter((lead) => index === 0 || PIPELINE_ORDER.indexOf(lead.stage) >= index)
+      .length,
   }))
 
   const activeProjects = PROJECTS.filter((p) => p.status === 'in_progress').length
+  const openProjects = PROJECTS.filter((p) => p.status !== 'completed' && p.status !== 'cancelled')
   /* Valued through the same function the estimator and the CRM board use, so
      the three agree. It was `estimatedKw * 60_000` — a rate that appeared
      nowhere else in the system, so the pipeline on this page disagreed with
@@ -298,7 +305,13 @@ export function AnalyticsPage() {
         <Card>
           <CardHeader
             title="Monthly revenue"
-            action={<span className="xs dim">September is partial</span>}
+            action={
+              revenueSeries.length > 0 && (
+                <span className="xs dim">
+                  {revenueSeries[revenueSeries.length - 1].label} is partial
+                </span>
+              )
+            }
           />
           <CardBody>
             <BarChart data={revenueSeries} format={currencyCompact} valueLabel="Collected" />
@@ -317,8 +330,9 @@ export function AnalyticsPage() {
           <CardBody>
             <FunnelChart stages={funnelStages} />
             <p className="xs dim" style={{ marginTop: 'var(--space-4)' }}>
-              Percentages show stage-to-stage conversion. The biggest drop is where to focus
-              coaching effort.
+              Each bar counts the enquiries that reached that stage or went further; the percentage
+              is how many made it from the stage before. The biggest drop is where to focus coaching
+              effort.
             </p>
           </CardBody>
         </Card>
@@ -390,7 +404,11 @@ export function AnalyticsPage() {
           />
           <CardBody>
             <div className="stack">
-              {PROJECTS.map((project) => {
+              {/* Handed-over and cancelled jobs are not active; "All →" has them. */}
+              {openProjects.length === 0 && (
+                <p className="small muted">No installations in progress.</p>
+              )}
+              {openProjects.map((project) => {
                 const done = project.milestones.filter((m) => m.status === 'done').length
                 return (
                   <div key={project.id}>
@@ -398,10 +416,7 @@ export function AnalyticsPage() {
                       <span className="strong">{project.clientName}</span>
                       <span className="num dim">{currency(project.contractValue)}</span>
                     </div>
-                    <Progress
-                      value={done / project.milestones.length}
-                      tone={project.status === 'completed' ? 'success' : 'brand'}
-                    />
+                    <Progress value={done / project.milestones.length} tone="brand" />
                     <div className="xs dim" style={{ marginTop: 2 }}>
                       {project.reference} · {done}/{project.milestones.length} milestones
                     </div>

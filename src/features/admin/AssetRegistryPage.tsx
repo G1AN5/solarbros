@@ -8,7 +8,7 @@ import { FormError } from '@/components/ui/FormError'
 import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatTile } from '@/components/ui/StatTile'
-import { date, humanize, yearsUntil } from '@/lib/format'
+import { date, humanize, timeLeft, yearsUntil } from '@/lib/format'
 import { QueryState } from '@/components/ui/QueryState'
 import {
   type AssetWithProject,
@@ -157,7 +157,7 @@ export function AssetRegistryPage() {
         return (
           <div>
             <Badge tone={yearsLeft > 3 ? 'success' : yearsLeft > 0 ? 'warning' : 'danger'}>
-              {yearsLeft > 0 ? `${Math.floor(yearsLeft)} yrs left` : 'Expired'}
+              {yearsLeft > 0 ? timeLeft(a.warrantyExpiresAt) : 'Expired'}
             </Badge>
             <div className="xs dim" style={{ marginTop: 2 }}>
               to {date(a.warrantyExpiresAt)}

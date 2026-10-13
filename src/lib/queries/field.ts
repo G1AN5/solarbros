@@ -385,7 +385,10 @@ export function useJob(appointmentId?: string) {
         project: data.project
           ? toProject(data.project, data.project.project_milestones ?? [])
           : null,
-        clientPhone: data.client?.phone ?? data.contact_phone ?? null,
+        // The visit's own number first: the office may have entered a
+        // different contact for this visit. `||`, not `??` — an account saved
+        // with an empty phone must not hide the one on the visit.
+        clientPhone: data.contact_phone || data.client?.phone || null,
       }
     },
   })

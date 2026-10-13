@@ -57,8 +57,10 @@ export function BarChart({ data, format, valueLabel = 'Value' }: BarChartProps) 
 
       <div className="chart__plot">
         <div className="chart__yaxis" aria-hidden>
-          {ticks.map((t) => (
-            <span key={t}>{t}</span>
+          {/* Keyed by position: on a small scale two ticks can format to the
+              same label ("₱1", "₱1"), and React then drops one. */}
+          {ticks.map((t, index) => (
+            <span key={index}>{t}</span>
           ))}
         </div>
 

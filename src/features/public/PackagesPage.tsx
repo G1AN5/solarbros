@@ -4,6 +4,7 @@ import { ButtonLink } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { Tabs } from '@/components/ui/Tabs'
 import { usePackages } from '@/lib/queries/crm'
+import { useCompany } from '@/lib/queries/public-site'
 import { currency } from '@/lib/format'
 import { SYSTEM_TYPE_LABEL } from '@/lib/labels'
 import { PageBanner } from '@/components/layout/PageBanner'
@@ -61,6 +62,7 @@ function Cell({ value }: { value: string | boolean }) {
 export function PackagesPage() {
   const packagesQuery = usePackages()
   const PACKAGES = packagesQuery.data ?? []
+  const company = useCompany()
 
   const [view, setView] = useState<View>('cards')
   const [segment, setSegment] = useState<Segment>('residential')
@@ -75,7 +77,9 @@ export function PackagesPage() {
         lead="Prices are complete installed costs — panels, inverter, mounting, wiring, permits, net-metering filing and commissioning. No surprise line items at handover."
         stats={[
           { value: 'No hidden fees', label: 'One quoted price' },
-          { value: '25 yrs', label: 'Panel warranty' },
+          // From Settings, like the home page — it said 25 here whatever the
+          // company had actually published.
+          { value: `${company.warrantyPanelYears} yrs`, label: 'Panel warranty' },
           { value: '3 days', label: 'Typical install' },
         ]}
       />

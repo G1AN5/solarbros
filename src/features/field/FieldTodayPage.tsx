@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { date, humanize } from '@/lib/format'
 import { APPOINTMENT_STATUS_TONE, APPOINTMENT_TYPE_LABEL } from '@/lib/labels'
@@ -103,9 +104,15 @@ export function FieldTodayPage() {
                 >
                   🧭 Navigate
                 </a>
-                <a className="btn btn--outline btn--block" href={`tel:${job.contactPhone ?? ''}`}>
-                  📞 Call client
-                </a>
+                {job.contactPhone ? (
+                  <a className="btn btn--outline btn--block" href={`tel:${job.contactPhone}`}>
+                    📞 Call client
+                  </a>
+                ) : (
+                  <Button variant="outline" block disabled>
+                    📞 No phone on file
+                  </Button>
+                )}
               </div>
             </CardBody>
           </Card>

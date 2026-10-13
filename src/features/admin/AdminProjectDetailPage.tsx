@@ -291,7 +291,7 @@ export function AdminProjectDetailPage() {
               style={{
                 marginBottom: 'var(--space-6)',
                 borderColor:
-                  gateQuery.data.permitsRejected > 0
+                  gateQuery.data.workPermitsRejected > 0
                     ? 'var(--danger-solid)'
                     : 'var(--warning-solid)',
               }}
@@ -303,20 +303,30 @@ export function AdminProjectDetailPage() {
                     <span style={{ fontSize: '1.25rem' }}>
                       {gateQuery.data.permitsReady
                         ? '✅'
-                        : gateQuery.data.permitsRejected > 0
+                        : gateQuery.data.workPermitsRejected > 0
                           ? '⛔'
                           : '⏳'}
                     </span>
                     <div>
-                      <div className="strong small">Permits</div>
+                      <div className="strong small">
+                        {gateQuery.data.phased ? 'Building and electrical permits' : 'Permits'}
+                      </div>
                       <div className="xs dim">
                         {gateQuery.data.permitsTotal === 0
                           ? 'None tracked yet — add the applications this project needs.'
-                          : `${gateQuery.data.permitsApproved} of ${gateQuery.data.permitsTotal} approved` +
-                            (gateQuery.data.permitsRejected > 0
-                              ? ` · ${gateQuery.data.permitsRejected} rejected`
-                              : '')}
+                          : gateQuery.data.workPermitsTotal === 0
+                            ? 'None tracked for this project.'
+                            : `${gateQuery.data.workPermitsApproved} of ${gateQuery.data.workPermitsTotal} approved` +
+                              (gateQuery.data.workPermitsRejected > 0
+                                ? ` · ${gateQuery.data.workPermitsRejected} rejected`
+                                : '')}
                       </div>
+                      {gateQuery.data.energisePermitsTotal > 0 && (
+                        <div className="xs dim">
+                          The utility&rsquo;s approvals come after installation — they hold up
+                          commissioning, not the crew.
+                        </div>
+                      )}
                       <Link className="xs" to="/admin/permits">
                         Open permits →
                       </Link>
@@ -345,6 +355,45 @@ export function AdminProjectDetailPage() {
                   it — reality does not always wait for paperwork — and the override is written to
                   the audit log so it can be found later.
                 </p>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* THE SECOND GATE
+              The utility inspects a finished installation, so its approvals
+              cannot hold up the crew — they hold up switching the system on.
+              Shown once the crew is clear, so the two cards never compete. */}
+          {gateQuery.data && isComplete(gateQuery.data) && !gateQuery.data.energiseReady && (
+            <Card
+              style={{
+                marginBottom: 'var(--space-6)',
+                borderColor:
+                  gateQuery.data.energisePermitsRejected > 0
+                    ? 'var(--danger-solid)'
+                    : 'var(--warning-solid)',
+              }}
+            >
+              <CardHeader title="Before the system is switched on" />
+              <CardBody>
+                <div className="row" style={{ alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: '1.25rem' }}>
+                    {gateQuery.data.energisePermitsRejected > 0 ? '⛔' : '⏳'}
+                  </span>
+                  <div>
+                    <div className="strong small">The utility&rsquo;s approvals</div>
+                    <div className="xs dim">
+                      {`${gateQuery.data.energisePermitsApproved} of ${gateQuery.data.energisePermitsTotal} approved` +
+                        (gateQuery.data.energisePermitsRejected > 0
+                          ? ` · ${gateQuery.data.energisePermitsRejected} refused`
+                          : '')}
+                      . The crew can build and test; Commissioning &amp; Testing cannot be signed
+                      off until every one is in.
+                    </div>
+                    <Link className="xs" to="/admin/permits">
+                      Open permits →
+                    </Link>
+                  </div>
+                </div>
               </CardBody>
             </Card>
           )}

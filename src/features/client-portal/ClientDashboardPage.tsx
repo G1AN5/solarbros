@@ -313,8 +313,13 @@ export function ClientDashboardPage() {
               )}
 
               <div className="row row--between small">
-                <span className="muted">Target turnover</span>
-                <span className="strong">{date(project.targetTurnover)}</span>
+                {/* Once handed over, the date it happened — not the one planned. */}
+                <span className="muted">
+                  {project.actualTurnover ? 'Handed over' : 'Target turnover'}
+                </span>
+                <span className="strong">
+                  {date(project.actualTurnover ?? project.targetTurnover)}
+                </span>
               </div>
               <div className="row row--between small">
                 <span className="muted">Your engineer</span>

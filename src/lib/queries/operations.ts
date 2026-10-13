@@ -154,10 +154,22 @@ export function useUpdateMilestone() {
    ========================================================================== */
 
 export interface ProjectGate {
+  /** False on a database without migration 0077, where every permit gates the crew. */
+  phased: boolean
+  /** The permits the crew needs are approved. */
   permitsReady: boolean
   permitsTotal: number
   permitsApproved: number
   permitsRejected: number
+  /** Building and electrical permits: they gate structural mounting. */
+  workPermitsTotal: number
+  workPermitsApproved: number
+  workPermitsRejected: number
+  /** The utility's approvals: they gate signing off commissioning. */
+  energiseReady: boolean
+  energisePermitsTotal: number
+  energisePermitsApproved: number
+  energisePermitsRejected: number
   materialsReady: boolean
   reservations: number
   reservationsShort: number
@@ -176,11 +188,26 @@ export function useProjectGate(projectId?: string) {
       if (error) throwReadable(error)
 
       const gate = data as Record<string, unknown>
+      // A database without migration 0077 has no phases: every permit gated
+      // the crew, so the overall figures are the crew's figures.
+      const phased = gate.work_permits_total !== undefined
       return {
+        phased,
         permitsReady: Boolean(gate.permits_ready),
         permitsTotal: Number(gate.permits_total ?? 0),
         permitsApproved: Number(gate.permits_approved ?? 0),
         permitsRejected: Number(gate.permits_rejected ?? 0),
+        workPermitsTotal: Number((phased ? gate.work_permits_total : gate.permits_total) ?? 0),
+        workPermitsApproved: Number(
+          (phased ? gate.work_permits_approved : gate.permits_approved) ?? 0,
+        ),
+        workPermitsRejected: Number(
+          (phased ? gate.work_permits_rejected : gate.permits_rejected) ?? 0,
+        ),
+        energiseReady: phased ? Boolean(gate.energise_ready) : true,
+        energisePermitsTotal: Number(gate.energise_permits_total ?? 0),
+        energisePermitsApproved: Number(gate.energise_permits_approved ?? 0),
+        energisePermitsRejected: Number(gate.energise_permits_rejected ?? 0),
         materialsReady: Boolean(gate.materials_ready),
         reservations: Number(gate.reservations ?? 0),
         reservationsShort: Number(gate.reservations_short ?? 0),

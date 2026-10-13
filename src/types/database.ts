@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   graphql_public: {
     Tables: {
@@ -3082,7 +3082,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_lead_stage: {
+        Args: {
+          p_lead: string
+          p_stage: Database["public"]["Enums"]["lead_stage"]
+        }
+        Returns: undefined
+      }
+      allocate_short_reservations: {
+        Args: { p_stock_item_id: string }
+        Returns: undefined
+      }
       am_in_conversation: { Args: { p_conversation: string }; Returns: boolean }
+      announce_enquiry: {
+        Args: { p_lead_id: string; p_message?: string }
+        Returns: undefined
+      }
+      appointment_label: {
+        Args: { p_type: Database["public"]["Enums"]["appointment_type"] }
+        Returns: string
+      }
       approve_staff: {
         Args: {
           p_approve: boolean
@@ -3124,6 +3143,11 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      client_id_for_email: { Args: { p_email: string }; Returns: string }
+      client_wants: {
+        Args: { p_category: string; p_channel: string; p_user: string }
+        Returns: boolean
       }
       console_search: {
         Args: { p_term: string }
@@ -3170,14 +3194,8 @@ export type Database = {
       is_crew_on_project: { Args: { p_project_id: string }; Returns: boolean }
       is_internal: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      link_client_records: { Args: { p_client: string }; Returns: undefined }
       may_message: { Args: { p_other: string }; Returns: boolean }
-      monthly_collections: {
-        Args: { p_months?: number }
-        Returns: {
-          collected: number
-          month: string
-        }[]
-      }
       messageable_people: {
         Args: never
         Returns: {
@@ -3188,12 +3206,87 @@ export type Database = {
           role: Database["public"]["Enums"]["user_role"]
         }[]
       }
+      monthly_collections: {
+        Args: { p_months?: number }
+        Returns: {
+          collected: number
+          month: string
+        }[]
+      }
+      notify_appointment_party: {
+        Args: {
+          p_appointment: Database["public"]["Tables"]["appointments"]["Row"]
+          p_body: string
+          p_title: string
+        }
+        Returns: undefined
+      }
+      notify_client: {
+        Args: {
+          p_body: string
+          p_category: string
+          p_entity?: string
+          p_entity_id?: string
+          p_title: string
+          p_user: string
+        }
+        Returns: undefined
+      }
+      notify_contact: {
+        Args: {
+          p_body: string
+          p_category: string
+          p_email: string
+          p_entity?: string
+          p_entity_id?: string
+          p_phone: string
+          p_sms?: boolean
+          p_title: string
+        }
+        Returns: undefined
+      }
+      notify_person: {
+        Args: {
+          p_body: string
+          p_category: string
+          p_entity?: string
+          p_entity_id?: string
+          p_title: string
+          p_user: string
+        }
+        Returns: undefined
+      }
+      notify_roles: {
+        Args: {
+          p_body: string
+          p_category: string
+          p_entity?: string
+          p_entity_id?: string
+          p_except?: string
+          p_roles: string[]
+          p_title: string
+        }
+        Returns: undefined
+      }
       open_conversation: {
         Args: { p_body: string; p_other: string }
         Returns: string
       }
+      open_enquiry_for: { Args: { p_email: string }; Returns: string }
+      owns_lead: { Args: { p_lead_id: string }; Returns: boolean }
       owns_project: { Args: { p_project_id: string }; Returns: boolean }
+      peso: { Args: { p_amount: number }; Returns: string }
       project_contact: { Args: { p_project_id: string }; Returns: Json }
+      project_gate_facts: { Args: { p_project_id: string }; Returns: Json }
+      project_gate_status: { Args: { p_project_id: string }; Returns: Json }
+      project_ready_for_dispatch: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
+      purchase_order_total: {
+        Args: { p_purchase_order_id: string }
+        Returns: number
+      }
       quotation_items_for_client: {
         Args: { p_quotation_id: string }
         Returns: {
@@ -3204,16 +3297,6 @@ export type Database = {
       rate_ticket: {
         Args: { p_rating: number; p_ticket_id: string }
         Returns: undefined
-      }
-      refresh_time_based_statuses: { Args: never; Returns: Json }
-      respond_to_quotation: {
-        Args: { p_accept: boolean; p_quotation_id: string; p_reason?: string }
-        Returns: undefined
-      }
-      project_gate_status: { Args: { p_project_id: string }; Returns: Json }
-      project_ready_for_dispatch: {
-        Args: { p_project_id: string }
-        Returns: boolean
       }
       record_client_upload: {
         Args: {
@@ -3227,6 +3310,7 @@ export type Database = {
         }
         Returns: string
       }
+      refresh_time_based_statuses: { Args: never; Returns: Json }
       release_project_reservations: {
         Args: { p_project_id: string }
         Returns: undefined
@@ -3251,6 +3335,10 @@ export type Database = {
       requeue_stalled_notifications: { Args: never; Returns: number }
       reserve_stock_for_project: {
         Args: { p_project_id: string; p_quotation_id: string }
+        Returns: undefined
+      }
+      respond_to_quotation: {
+        Args: { p_accept: boolean; p_quotation_id: string; p_reason?: string }
         Returns: undefined
       }
       setting_num: {
@@ -3299,6 +3387,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      sync_permit_stages: { Args: { p_project_id: string }; Returns: undefined }
       ticket_thread: {
         Args: { p_ticket_id: string }
         Returns: {

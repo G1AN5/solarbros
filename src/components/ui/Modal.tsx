@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 
 /* ============================================================================
    Modal — built on the native <dialog> element.
@@ -16,6 +16,14 @@ import { useEffect, useRef, type ReactNode } from 'react'
    TWO THINGS THE ELEMENT DOES NOT DO ON ITS OWN
    Closing on a backdrop click, and staying in step with React state when the
    user dismisses it with Escape. Both are handled below.
+
+   ITS CONTENT EXISTS ONLY WHILE IT IS OPEN
+   The forms inside are uncontrolled — `defaultValue` from the record being
+   edited. A closed <dialog> is only hidden, so its form stayed mounted between
+   openings, and a field that had been typed in no longer followed its default:
+   editing one catalogue item and then another showed the first one's edits,
+   and saving wrote them onto the second. Mounting the content per opening
+   makes every form start from the record it is showing.
    ========================================================================== */
 
 interface ModalProps {
@@ -30,7 +38,9 @@ interface ModalProps {
 export function Modal({ open, onClose, title, footer, children }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null)
 
-  useEffect(() => {
+  // A layout effect: the content unmounts as `open` turns false, and the
+  // dialog has to close in that same frame or an empty box flashes.
+  useLayoutEffect(() => {
     const dialog = ref.current
     if (!dialog) return
 
@@ -72,9 +82,9 @@ export function Modal({ open, onClose, title, footer, children }: ModalProps) {
           </button>
         </div>
 
-        <div className="modal__content">{children}</div>
+        <div className="modal__content">{open && children}</div>
 
-        {footer && <div className="modal__foot">{footer}</div>}
+        {open && footer && <div className="modal__foot">{footer}</div>}
       </div>
     </dialog>
   )

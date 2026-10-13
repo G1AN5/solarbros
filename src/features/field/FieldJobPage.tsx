@@ -139,6 +139,8 @@ export function FieldJobPage() {
   const startJob = useStartJob()
   const [signoffName, setSignoffName] = useState('')
   const [closedNote, setClosedNote] = useState<string | null>(null)
+  /** Waiting for the phone's position, which can take seconds before the start is sent. */
+  const [locating, setLocating] = useState(false)
   const { isOnline } = useOfflineQueue()
 
   const [checked, setChecked] = useState<Set<number>>(
@@ -171,6 +173,7 @@ export function FieldJobPage() {
     )
   }
 
+  const phone = jobQuery.data?.clientPhone || job.contactPhone
   const checklist = CHECKLISTS[job.type] ?? CHECKLISTS.installation
   const progress = checked.size / checklist.length
   const isClosed = job.status === 'completed' || closedNote !== null
@@ -210,7 +213,9 @@ export function FieldJobPage() {
 
   async function handleStart() {
     if (!job) return
+    setLocating(true)
     const position = await currentPosition()
+    setLocating(false)
     startJob.mutate({ appointmentId: job.id, projectId: job.projectId ?? null, ...position })
   }
 
@@ -276,12 +281,15 @@ export function FieldJobPage() {
             >
               🧭 Navigate
             </a>
-            <a
-              className="btn btn--outline btn--sm btn--block"
-              href={`tel:${jobQuery.data?.clientPhone ?? job.contactPhone ?? ''}`}
-            >
-              📞 Call
-            </a>
+            {phone ? (
+              <a className="btn btn--outline btn--sm btn--block" href={`tel:${phone}`}>
+                📞 Call
+              </a>
+            ) : (
+              <Button variant="outline" size="sm" block disabled>
+                📞 No phone on file
+              </Button>
+            )}
           </div>
 
           {/* ------------------------------------------- ARRIVED ON SITE */}
@@ -297,10 +305,14 @@ export function FieldJobPage() {
                 <Button
                   variant="primary"
                   block
-                  disabled={startJob.isPending}
+                  disabled={locating || startJob.isPending}
                   onClick={() => void handleStart()}
                 >
-                  {startJob.isPending ? 'Starting…' : '▶ I have arrived — start the job'}
+                  {locating
+                    ? 'Finding your location…'
+                    : startJob.isPending
+                      ? 'Starting…'
+                      : '▶ I have arrived — start the job'}
                 </Button>
               )}
               <FormError error={startJob.error} />

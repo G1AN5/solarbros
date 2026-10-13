@@ -86,8 +86,10 @@ export function ProjectTrackerPage() {
               <div className="strong">{date(project.startDate)}</div>
             </div>
             <div>
-              <div className="small dim">Target turnover</div>
-              <div className="strong">{date(project.targetTurnover)}</div>
+              <div className="small dim">
+                {project.actualTurnover ? 'Handed over' : 'Target turnover'}
+              </div>
+              <div className="strong">{date(project.actualTurnover ?? project.targetTurnover)}</div>
             </div>
           </div>
 

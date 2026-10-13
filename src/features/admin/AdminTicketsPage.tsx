@@ -53,7 +53,9 @@ const PRIORITY_MEANING: Record<TicketPriority, string> = {
 }
 
 function hoursLabel(hours: number): string {
-  return hours < 24 ? `${hours} hour${hours === 1 ? '' : 's'}` : `${Math.round(hours / 24)} days`
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'}`
+  const days = Math.round(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'}`
 }
 
 export function AdminTicketsPage() {
@@ -326,130 +328,140 @@ export function AdminTicketsPage() {
         title={working ? `${working.reference} · ${working.subject}` : 'Ticket'}
       >
         {working && (
-          <form
-            className="stack"
-            onSubmit={(event) => {
-              event.preventDefault()
-              const form = new FormData(event.currentTarget)
-              const assignee = String(form.get('assignee') ?? '')
+          /* The conversation below is a form of its own, so it cannot sit
+             inside this one: nested forms are invalid HTML, and a submit
+             bubbles — every message sent from here also saved the triage
+             fields, notified the customer and closed the dialog. The fields
+             after the conversation join this form through `form=`. */
+          <div className="stack">
+            <form
+              id="ticket-triage"
+              className="stack"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const form = new FormData(event.currentTarget)
+                const assignee = String(form.get('assignee') ?? '')
 
-              const coverage = String(form.get('warranty') ?? '')
-              const warrantyCovered =
-                coverage === 'covered' ? true : coverage === 'billable' ? false : null
+                const coverage = String(form.get('warranty') ?? '')
+                const warrantyCovered =
+                  coverage === 'covered' ? true : coverage === 'billable' ? false : null
 
-              updateTicket.mutate(
-                {
-                  id: working.id,
-                  status: String(form.get('status')) as Ticket['status'],
-                  priority: String(form.get('priority')) as Ticket['priority'],
-                  assignedTo: assignee || null,
-                  resolution: String(form.get('resolution') ?? '') || undefined,
-                  // Only sent when it changed, so the triage stamp means something.
-                  ...(warrantyCovered !== (working.warrantyCovered ?? null)
-                    ? { warrantyCovered, triagedBy: user?.id }
-                    : {}),
-                },
-                { onSuccess: () => setWorking(null) },
-              )
-            }}
-          >
-            <div
-              style={{
-                padding: 'var(--space-3)',
-                background: 'var(--ink-50)',
-                borderRadius: 'var(--radius)',
+                updateTicket.mutate(
+                  {
+                    id: working.id,
+                    status: String(form.get('status')) as Ticket['status'],
+                    priority: String(form.get('priority')) as Ticket['priority'],
+                    assignedTo: assignee || null,
+                    resolution: String(form.get('resolution') ?? '') || undefined,
+                    // Only sent when it changed, so the triage stamp means something.
+                    ...(warrantyCovered !== (working.warrantyCovered ?? null)
+                      ? { warrantyCovered, triagedBy: user?.id }
+                      : {}),
+                  },
+                  { onSuccess: () => setWorking(null) },
+                )
               }}
             >
-              <p className="small">{working.description}</p>
-              <p className="xs dim" style={{ marginTop: 'var(--space-2)' }}>
-                Raised by {working.clientName} · {humanize(working.category)} ·{' '}
-                {relative(working.createdAt)}
-                {working.satisfactionRating
-                  ? ` · rated ${'★'.repeat(working.satisfactionRating)}`
-                  : ''}
-              </p>
-            </div>
-
-            <div className="field">
-              <label className="field__label" htmlFor="ticket-assignee">
-                Assign to
-              </label>
-              <select
-                id="ticket-assignee"
-                name="assignee"
-                className="select"
-                defaultValue={working.assignedToId ?? ''}
+              <div
+                style={{
+                  padding: 'var(--space-3)',
+                  background: 'var(--ink-50)',
+                  borderRadius: 'var(--radius)',
+                }}
               >
-                <option value="">Unassigned</option>
-                {staff.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.fullName} · {ROLE_LABEL[member.role]}
-                  </option>
-                ))}
-              </select>
-              <span className="field__hint">They are notified, and it appears in their bell.</span>
-            </div>
+                <p className="small">{working.description}</p>
+                <p className="xs dim" style={{ marginTop: 'var(--space-2)' }}>
+                  Raised by {working.clientName} · {humanize(working.category)} ·{' '}
+                  {relative(working.createdAt)}
+                  {working.satisfactionRating
+                    ? ` · rated ${'★'.repeat(working.satisfactionRating)}`
+                    : ''}
+                </p>
+              </div>
 
-            <div className="field">
-              <label className="field__label" htmlFor="ticket-warranty">
-                Warranty
-              </label>
-              <select
-                id="ticket-warranty"
-                name="warranty"
-                className="select"
-                defaultValue={
-                  working.warrantyCovered === true
-                    ? 'covered'
-                    : working.warrantyCovered === false
-                      ? 'billable'
-                      : ''
-                }
-              >
-                <option value="">Not decided yet</option>
-                <option value="covered">Covered by the warranty</option>
-                <option value="billable">Not covered — chargeable</option>
-              </select>
-              <span className="field__hint">
-                A chargeable repair is invoiced from Finance as an &ldquo;Other&rdquo; invoice.
-              </span>
-            </div>
-
-            <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label className="field__label" htmlFor="ticket-status">
-                  Status
+              <div className="field">
+                <label className="field__label" htmlFor="ticket-assignee">
+                  Assign to
                 </label>
                 <select
-                  id="ticket-status"
-                  name="status"
+                  id="ticket-assignee"
+                  name="assignee"
                   className="select"
-                  defaultValue={working.status}
+                  defaultValue={working.assignedToId ?? ''}
                 >
-                  <option value="open">Open</option>
-                  <option value="in_progress">In progress</option>
-                  <option value="awaiting_client">Awaiting client</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="closed">Closed</option>
+                  <option value="">Unassigned</option>
+                  {staff.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.fullName} · {ROLE_LABEL[member.role]}
+                    </option>
+                  ))}
                 </select>
+                <span className="field__hint">
+                  They are notified, and it appears in their bell.
+                </span>
               </div>
-              <div className="field" style={{ flex: 1 }}>
-                <label className="field__label" htmlFor="ticket-priority">
-                  Priority
+
+              <div className="field">
+                <label className="field__label" htmlFor="ticket-warranty">
+                  Warranty
                 </label>
                 <select
-                  id="ticket-priority"
-                  name="priority"
+                  id="ticket-warranty"
+                  name="warranty"
                   className="select"
-                  defaultValue={working.priority}
+                  defaultValue={
+                    working.warrantyCovered === true
+                      ? 'covered'
+                      : working.warrantyCovered === false
+                        ? 'billable'
+                        : ''
+                  }
                 >
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="">Not decided yet</option>
+                  <option value="covered">Covered by the warranty</option>
+                  <option value="billable">Not covered — chargeable</option>
                 </select>
+                <span className="field__hint">
+                  A chargeable repair is invoiced from Finance as an &ldquo;Other&rdquo; invoice.
+                </span>
               </div>
-            </div>
+
+              <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field__label" htmlFor="ticket-status">
+                    Status
+                  </label>
+                  <select
+                    id="ticket-status"
+                    name="status"
+                    className="select"
+                    defaultValue={working.status}
+                  >
+                    <option value="open">Open</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="awaiting_client">Awaiting client</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field__label" htmlFor="ticket-priority">
+                    Priority
+                  </label>
+                  <select
+                    id="ticket-priority"
+                    name="priority"
+                    className="select"
+                    defaultValue={working.priority}
+                  >
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+            </form>
 
             {/* The conversation, in the same place as the triage decision.
                 Anything typed here reaches the customer's own support page. */}
@@ -468,6 +480,7 @@ export function AdminTicketsPage() {
               </label>
               <textarea
                 id="ticket-resolution"
+                form="ticket-triage"
                 name="resolution"
                 className="textarea"
                 rows={3}
@@ -479,7 +492,12 @@ export function AdminTicketsPage() {
             <FormError error={updateTicket.error} />
 
             <div className="row" style={{ gap: 'var(--space-3)' }}>
-              <Button type="submit" variant="primary" disabled={updateTicket.isPending}>
+              <Button
+                type="submit"
+                form="ticket-triage"
+                variant="primary"
+                disabled={updateTicket.isPending}
+              >
                 {updateTicket.isPending ? 'Saving…' : 'Save and notify the customer'}
               </Button>
               <Button
@@ -493,7 +511,7 @@ export function AdminTicketsPage() {
                 Send a technician
               </Button>
             </div>
-          </form>
+          </div>
         )}
       </Modal>
 

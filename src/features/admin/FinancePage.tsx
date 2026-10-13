@@ -83,6 +83,20 @@ export function FinancePage() {
   }, [queryClient])
 
   const proofs = usePaymentProofs().data ?? []
+  /* The billing page names a proof after the invoice it pays
+     ("INV-2026-1120 - slip.png"). It was offered against whichever invoice of
+     the project was unpaid — so once the first was recorded, the same slip
+     was offered again against the next invoice, inviting a second recording
+     of one bank transfer. Each proof now points at its own invoice, a settled
+     one says so, and the ones still to check come first. */
+  const proofsToCheck = proofs
+    .map((proof) => {
+      const named = invoices.find((i) => proof.name.startsWith(`${i.number} - `))
+      const target =
+        named ?? invoices.find((i) => i.projectId === proof.projectId && i.amount > i.amountPaid)
+      return { proof, target, settled: !target || target.amount <= target.amountPaid }
+    })
+    .sort((a, b) => Number(a.settled) - Number(b.settled))
   const commissions = useCommissions().data ?? []
   const setCommission = useSetCommissionStatus()
   const pendingCommissions = commissions.filter((c) => c.status === 'pending')
@@ -493,10 +507,7 @@ export function FinancePage() {
               pays. The customer is notified when it is recorded.
             </p>
             <div className="stack stack--sm">
-              {proofs.map((proof) => {
-                const unpaid = invoices.find(
-                  (i) => i.projectId === proof.projectId && i.amount > i.amountPaid,
-                )
+              {proofsToCheck.map(({ proof, target, settled }) => {
                 return (
                   <div key={proof.id} className="row row--between row--wrap">
                     <div>
@@ -507,16 +518,18 @@ export function FinancePage() {
                     </div>
                     <div className="row" style={{ gap: 'var(--space-2)' }}>
                       <DownloadButton storagePath={proof.storagePath ?? undefined} />
-                      {unpaid ? (
+                      {target && !settled ? (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setPayingInvoice(unpaid)}
+                          onClick={() => setPayingInvoice(target)}
                         >
-                          Record against {unpaid.number}
+                          Record against {target.number}
                         </Button>
                       ) : (
-                        <span className="xs dim">Nothing outstanding</span>
+                        <span className="xs dim">
+                          {target ? `${target.number} is paid` : 'Nothing outstanding'}
+                        </span>
                       )}
                     </div>
                   </div>

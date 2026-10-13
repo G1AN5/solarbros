@@ -51,6 +51,13 @@ export type PermitType =
 
 export type PermitStatus = 'preparing' | 'submitted' | 'under_review' | 'approved' | 'rejected'
 
+/** The permits a crew needs before work starts. The rest are the utility's,
+ *  granted after it inspects the installation; they hold up commissioning.
+ *  Mirrors `project_gate_facts` in migration 0077. */
+export function isWorkPermit(type: PermitType): boolean {
+  return type === 'lgu_building' || type === 'electrical'
+}
+
 export interface Permit {
   id: string
   projectId: string
