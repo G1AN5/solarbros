@@ -68,7 +68,6 @@ function check(label, ok, detail = '') {
   }
 }
 
-
 /* Supabase's BUILT-IN email sender allows roughly two messages an hour, and
    every `auth.signUp` here triggers a confirmation email. Hitting that limit
    says nothing about the code under test, so it is reported as a skip rather
@@ -182,11 +181,7 @@ if (!engineer) {
   const { count: payroll } = await engineer
     .from('payroll_lines')
     .select('id', { count: 'exact', head: true })
-  check(
-    'and cannot read anybody else’s payroll',
-    (payroll ?? 0) === 0,
-    `${payroll} rows came back`,
-  )
+  check('and cannot read anybody else’s payroll', (payroll ?? 0) === 0, `${payroll} rows came back`)
 
   /* ====================================================================== */
   console.log(`\n4 · Deactivation actually revokes\n${LINE}`)

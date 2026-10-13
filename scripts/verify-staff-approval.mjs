@@ -62,7 +62,6 @@ function check(label, ok, detail = '') {
   }
 }
 
-
 /* Supabase's BUILT-IN email sender allows roughly two messages an hour, and
    every `auth.signUp` here triggers a confirmation email. Hitting that limit
    says nothing about the code under test, so it is reported as a skip rather
@@ -249,7 +248,9 @@ const { data: auditRows } = await admin
   .eq('entity_id', applicantId)
 check(
   'and the grant is on the audit trail at warning severity',
-  (auditRows ?? []).some((r) => r.action === 'staff_registration_approved' && r.severity === 'warning'),
+  (auditRows ?? []).some(
+    (r) => r.action === 'staff_registration_approved' && r.severity === 'warning',
+  ),
 )
 
 /* ========================================================================== */

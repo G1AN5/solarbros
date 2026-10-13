@@ -92,11 +92,7 @@ const created = { orders: [], permits: [] }
 /* ========================================================================== */
 console.log(`\n1 · Raising a purchase order\n${LINE}`)
 
-let { data: supplier } = await admin
-  .from('suppliers')
-  .select('id, name')
-  .limit(1)
-  .maybeSingle()
+let { data: supplier } = await admin.from('suppliers').select('id, name').limit(1).maybeSingle()
 
 if (!supplier) {
   const { data: made, error: supplierError } = await admin

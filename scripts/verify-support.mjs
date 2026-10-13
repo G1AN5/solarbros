@@ -351,11 +351,7 @@ check(
 /* An RMA claim needs a serialised unit to point at. On a system with no
    installations yet there is none, so the suite makes one rather than
    crashing — see the note in verify-procurement.mjs. */
-let { data: asset } = await admin
-  .from('serialised_assets')
-  .select('id')
-  .limit(1)
-  .maybeSingle()
+let { data: asset } = await admin.from('serialised_assets').select('id').limit(1).maybeSingle()
 
 if (!asset) {
   const { data: madeAsset, error: assetError } = await admin
@@ -434,11 +430,7 @@ console.log(`\n8 · The customer can finally send us a file\n${LINE}`)
    photo input and the proof-of-sale input both accepted a file and threw it
    away — and the staff warranty queue was asking a reviewer to approve a
    transfer whose evidence the customer had no way to provide. */
-const { data: clientProject } = await client
-  .from('projects')
-  .select('id')
-  .limit(1)
-  .maybeSingle()
+const { data: clientProject } = await client.from('projects').select('id').limit(1).maybeSingle()
 
 if (!clientProject) {
   check('the demo customer has a project to upload against', false, 'no project found')
@@ -576,7 +568,10 @@ for (const id of created.tickets) {
   await admin.from('tickets').delete().eq('id', id)
 }
 
-const { data: leftovers } = await admin.from('tickets').select('id').like('subject', 'Support check%')
+const { data: leftovers } = await admin
+  .from('tickets')
+  .select('id')
+  .like('subject', 'Support check%')
 check('the test records were removed', (leftovers?.length ?? 0) === 0, `${leftovers?.length} left`)
 
 const { data: restoredStatus } = await admin

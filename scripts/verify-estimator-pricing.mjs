@@ -179,7 +179,11 @@ console.log('\nESTIMATOR PRICING — as an anonymous visitor\n')
       // is worse than no verification script.
       await admin.from('settings').update({ value: original }).eq('key', KEY)
 
-      const { data: restored } = await admin.from('settings').select('value').eq('key', KEY).single()
+      const { data: restored } = await admin
+        .from('settings')
+        .select('value')
+        .eq('key', KEY)
+        .single()
       record(
         'the probe value was restored',
         Number(restored?.value) === original,

@@ -33,8 +33,13 @@ const LINE = '='.repeat(64)
 let passed = 0
 let failed = 0
 function check(label, ok, detail = '') {
-  if (ok) { passed++; console.log(`  PASS  ${label}`) }
-  else { failed++; console.log(`  FAIL  ${label}${detail ? ` — ${detail}` : ''}`) }
+  if (ok) {
+    passed++
+    console.log(`  PASS  ${label}`)
+  } else {
+    failed++
+    console.log(`  FAIL  ${label}${detail ? ` — ${detail}` : ''}`)
+  }
 }
 
 const admin = createClient(URL, ANON, { auth: { persistSession: false } })

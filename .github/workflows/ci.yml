@@ -23,6 +23,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Adds a "Run workflow" button under Actions → CI, to run the checks again
+  # without pushing anything (after a billing hold clears, for instance).
+  workflow_dispatch:
 
 # Cancel an in-progress run if you push again to the same branch — saves
 # minutes and gives you results for the latest commit only.

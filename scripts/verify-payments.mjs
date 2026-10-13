@@ -398,11 +398,7 @@ const { data: refund, error: refundError } = await accountant
 check('an accountant can record a refund', !refundError, refundError?.message)
 if (refund) refundIds.push(refund.id)
 
-check(
-  'it is recorded, not confirmed',
-  refund?.status === 'recorded',
-  `status is ${refund?.status}`,
-)
+check('it is recorded, not confirmed', refund?.status === 'recorded', `status is ${refund?.status}`)
 check(
   'and it is signed by the session, not by the request',
   refund?.recorded_by === accountant.userId,

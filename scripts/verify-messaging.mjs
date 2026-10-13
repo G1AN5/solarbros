@@ -79,7 +79,7 @@ const TARGET = process.argv[4] ?? process.env.VERIFY_FORBIDDEN_ID
 
 if (!TARGET) {
   console.log(
-    'SKIP  pass the user id of a staff member NOT on this customer\'s job as the 4th\n' +
+    "SKIP  pass the user id of a staff member NOT on this customer's job as the 4th\n" +
       '      argument to test the bypass directly.',
   )
 } else {
