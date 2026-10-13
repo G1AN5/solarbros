@@ -10,16 +10,15 @@ import { FormError } from '@/components/ui/FormError'
 import { Modal } from '@/components/ui/Modal'
 import { Tabs } from '@/components/ui/Tabs'
 import { TicketThread } from '@/components/ui/TicketThread'
+import { useAuth } from '@/app/auth/useAuth'
 import { humanize, relative } from '@/lib/format'
-import { TICKET_PRIORITY_TONE, TICKET_STATUS_TONE } from '@/lib/labels'
+import { ROLE_LABEL, TICKET_PRIORITY_TONE, TICKET_STATUS_TONE } from '@/lib/labels'
 import { QueryState } from '@/components/ui/QueryState'
-import {
-  useAllTickets,
-  useCreateAppointment,
-  useCrew,
-  useUpdateTicket,
-} from '@/lib/queries/operations'
-import type { Ticket, TicketStatus } from '@/types/domain'
+import { useStaff } from '@/lib/queries/admin'
+import { useAllTickets, useCreateAppointment, useUpdateTicket } from '@/lib/queries/operations'
+import { settingNum, settingText, useSettings } from '@/lib/queries/settings'
+import { useNow } from '@/lib/use-now'
+import type { Ticket, TicketPriority, TicketStatus } from '@/types/domain'
 import { datedFilename, downloadCsv } from '@/lib/csv'
 
 /* ============================================================================
@@ -35,20 +34,64 @@ import { datedFilename, downloadCsv } from '@/lib/csv'
 
    Sorting is deliberately by priority THEN age: an urgent ticket opened an hour
    ago outranks a low-priority one from last week.
+
+   RESPONSE TARGETS COME FROM SETTINGS
+   The targets card was four typed sentences and nothing measured against
+   them. They are now the `support.sla_*_hours` settings, and a ticket still
+   untouched past its target is flagged in the queue.
    ========================================================================== */
 
 type Filter = 'all' | TicketStatus
 
 const PRIORITY_WEIGHT = { urgent: 0, high: 1, normal: 2, low: 3 }
 
+const PRIORITY_MEANING: Record<TicketPriority, string> = {
+  urgent: 'system down or a safety risk',
+  high: 'output materially affected',
+  normal: 'a fault or a question',
+  low: 'when convenient',
+}
+
+function hoursLabel(hours: number): string {
+  return hours < 24 ? `${hours} hour${hours === 1 ? '' : 's'}` : `${Math.round(hours / 24)} days`
+}
+
 export function AdminTicketsPage() {
   const [filter, setFilter] = useState<Filter>('all')
   const [working, setWorking] = useState<Ticket | null>(null)
 
+  const { user } = useAuth()
   const ticketsQuery = useAllTickets()
   const tickets = ticketsQuery.data ?? []
-  const crew = useCrew().data ?? []
+  /* Anyone on the staff can own a ticket — a billing question belongs with
+     the accountant, a fault with an engineer or technician. The list used to
+     offer field staff only. */
+  const staff = (useStaff().data ?? []).filter((s) => s.isActive)
   const updateTicket = useUpdateTicket()
+
+  const settings = useSettings().data
+  const sla: Record<TicketPriority, number> = {
+    urgent: settingNum(settings, 'support.sla_urgent_hours', 2),
+    high: settingNum(settings, 'support.sla_high_hours', 24),
+    normal: settingNum(settings, 'support.sla_normal_hours', 48),
+    low: settingNum(settings, 'support.sla_low_hours', 120),
+  }
+  const slots = settingText(
+    settings,
+    'operations.booking_slots',
+    '08:00,09:00,10:00,11:00,13:00,14:00,15:00,16:00',
+  )
+    .split(',')
+    .map((slot) => slot.trim())
+    .filter(Boolean)
+
+  /** Still not picked up, and older than its priority's response target. */
+  const now = useNow()
+  function responseOverdue(ticket: Ticket): boolean {
+    if (ticket.status !== 'open') return false
+    const ageHours = (now - new Date(ticket.createdAt).getTime()) / 3_600_000
+    return ageHours > sla[ticket.priority]
+  }
 
   /* "Dispatch" was a second, inert button sitting next to the real one. The
      escalation it named - ticket becomes a site visit - is the step the flow
@@ -93,8 +136,9 @@ export function AdminTicketsPage() {
     })
 
   const open = tickets.filter((t) => t.status !== 'resolved' && t.status !== 'closed')
-  const urgent = tickets.filter((t) => t.priority === 'urgent' && t.status !== 'resolved')
+  const urgent = open.filter((t) => t.priority === 'urgent')
   const unassigned = open.filter((t) => !t.assignedTo)
+  const overdue = open.filter(responseOverdue)
 
   /* This tile read "1.8 days · 12% faster" and both figures were typed in by
      hand. A support manager judges the team on this number, so inventing it is
@@ -128,7 +172,12 @@ export function AdminTicketsPage() {
     },
     {
       header: 'Priority',
-      cell: (t) => <Badge tone={TICKET_PRIORITY_TONE[t.priority]}>{humanize(t.priority)}</Badge>,
+      cell: (t) => (
+        <div className="stack stack--sm" style={{ gap: 2 }}>
+          <Badge tone={TICKET_PRIORITY_TONE[t.priority]}>{humanize(t.priority)}</Badge>
+          {responseOverdue(t) && <Badge tone="danger">Response overdue</Badge>}
+        </div>
+      ),
     },
     {
       header: 'Status',
@@ -183,8 +232,12 @@ export function AdminTicketsPage() {
         <StatTile
           label="Urgent"
           value={String(urgent.length)}
-          delta="2-hour response target"
-          direction={urgent.length ? 'up' : 'flat'}
+          delta={
+            overdue.length
+              ? `${overdue.length} past their response target`
+              : `${hoursLabel(sla.urgent)} response target`
+          }
+          direction={urgent.length || overdue.length ? 'up' : 'flat'}
           invertDelta
         />
         <StatTile
@@ -213,6 +266,7 @@ export function AdminTicketsPage() {
           { value: 'in_progress' as Filter, label: 'In progress' },
           { value: 'awaiting_client' as Filter, label: 'Awaiting client' },
           { value: 'resolved' as Filter, label: 'Resolved' },
+          { value: 'closed' as Filter, label: 'Closed' },
         ]}
         active={filter}
         onChange={setFilter}
@@ -247,23 +301,18 @@ export function AdminTicketsPage() {
         <CardBody>
           <h4>Response targets</h4>
           <div className="grid" style={{ marginTop: 'var(--space-3)' }}>
-            <div className="row">
-              <Badge tone="danger">Urgent</Badge>
-              <span className="small muted">2 hours — system down or a safety risk</span>
-            </div>
-            <div className="row">
-              <Badge tone="warning">High</Badge>
-              <span className="small muted">1 business day — output materially affected</span>
-            </div>
-            <div className="row">
-              <Badge tone="info">Normal</Badge>
-              <span className="small muted">2 business days</span>
-            </div>
-            <div className="row">
-              <Badge tone="neutral">Low</Badge>
-              <span className="small muted">5 business days</span>
-            </div>
+            {(['urgent', 'high', 'normal', 'low'] as TicketPriority[]).map((priority) => (
+              <div key={priority} className="row">
+                <Badge tone={TICKET_PRIORITY_TONE[priority]}>{humanize(priority)}</Badge>
+                <span className="small muted">
+                  {hoursLabel(sla[priority])} — {PRIORITY_MEANING[priority]}
+                </span>
+              </div>
+            ))}
           </div>
+          <p className="xs dim" style={{ marginTop: 'var(--space-3)' }}>
+            Set under Settings → Support. A ticket still open past its target is flagged above.
+          </p>
         </CardBody>
       </Card>
 
@@ -284,6 +333,10 @@ export function AdminTicketsPage() {
               const form = new FormData(event.currentTarget)
               const assignee = String(form.get('assignee') ?? '')
 
+              const coverage = String(form.get('warranty') ?? '')
+              const warrantyCovered =
+                coverage === 'covered' ? true : coverage === 'billable' ? false : null
+
               updateTicket.mutate(
                 {
                   id: working.id,
@@ -291,6 +344,10 @@ export function AdminTicketsPage() {
                   priority: String(form.get('priority')) as Ticket['priority'],
                   assignedTo: assignee || null,
                   resolution: String(form.get('resolution') ?? '') || undefined,
+                  // Only sent when it changed, so the triage stamp means something.
+                  ...(warrantyCovered !== (working.warrantyCovered ?? null)
+                    ? { warrantyCovered, triagedBy: user?.id }
+                    : {}),
                 },
                 { onSuccess: () => setWorking(null) },
               )
@@ -305,7 +362,11 @@ export function AdminTicketsPage() {
             >
               <p className="small">{working.description}</p>
               <p className="xs dim" style={{ marginTop: 'var(--space-2)' }}>
-                Raised by {working.clientName} · {humanize(working.category)}
+                Raised by {working.clientName} · {humanize(working.category)} ·{' '}
+                {relative(working.createdAt)}
+                {working.satisfactionRating
+                  ? ` · rated ${'★'.repeat(working.satisfactionRating)}`
+                  : ''}
               </p>
             </div>
 
@@ -320,12 +381,38 @@ export function AdminTicketsPage() {
                 defaultValue={working.assignedToId ?? ''}
               >
                 <option value="">Unassigned</option>
-                {crew.map((member) => (
+                {staff.map((member) => (
                   <option key={member.id} value={member.id}>
-                    {member.fullName}
+                    {member.fullName} · {ROLE_LABEL[member.role]}
                   </option>
                 ))}
               </select>
+              <span className="field__hint">They are notified, and it appears in their bell.</span>
+            </div>
+
+            <div className="field">
+              <label className="field__label" htmlFor="ticket-warranty">
+                Warranty
+              </label>
+              <select
+                id="ticket-warranty"
+                name="warranty"
+                className="select"
+                defaultValue={
+                  working.warrantyCovered === true
+                    ? 'covered'
+                    : working.warrantyCovered === false
+                      ? 'billable'
+                      : ''
+                }
+              >
+                <option value="">Not decided yet</option>
+                <option value="covered">Covered by the warranty</option>
+                <option value="billable">Not covered — chargeable</option>
+              </select>
+              <span className="field__hint">
+                A chargeable repair is invoiced from Finance as an &ldquo;Other&rdquo; invoice.
+              </span>
             </div>
 
             <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
@@ -429,19 +516,25 @@ export function AdminTicketsPage() {
                 <label className="field__label" htmlFor="disp-date">
                   Date
                 </label>
-                <input id="disp-date" name="date" className="input" type="date" required />
+                <input
+                  id="disp-date"
+                  name="date"
+                  className="input"
+                  type="date"
+                  required
+                  min={new Date().toISOString().slice(0, 10)}
+                />
               </div>
               <div className="field" style={{ flex: 1 }}>
                 <label className="field__label" htmlFor="disp-slot">
                   Time
                 </label>
-                <select id="disp-slot" name="slot" className="select" defaultValue="09:00">
-                  <option value="08:00">08:00</option>
-                  <option value="09:00">09:00</option>
-                  <option value="10:00">10:00</option>
-                  <option value="13:00">13:00</option>
-                  <option value="14:00">14:00</option>
-                  <option value="15:00">15:00</option>
+                <select id="disp-slot" name="slot" className="select" defaultValue={slots[0]}>
+                  {slots.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slot}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

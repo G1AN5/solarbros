@@ -66,6 +66,12 @@ export interface Lead {
   score: number
   source: 'estimator' | 'quote_request' | 'referral' | 'walk_in' | 'facebook'
   assignedTo: string
+  /** The owner's id, so a form can preselect them. */
+  assignedToId?: string
+  /** Full property address, for the survey. `location` is the area. */
+  address: string
+  /** Set once the lead belongs to a customer account. */
+  convertedClientId?: string
   createdAt: string
 }
 
@@ -101,7 +107,7 @@ export interface Milestone {
   note?: string
 }
 
-export type ProjectStatus = 'planning' | 'in_progress' | 'on_hold' | 'completed'
+export type ProjectStatus = 'planning' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled'
 
 export interface Project {
   id: string
@@ -116,8 +122,12 @@ export interface Project {
   status: ProjectStatus
   milestones: Milestone[]
   assignedEngineer: string
+  /** The engineer's profile id, for the office's team controls. */
+  assignedEngineerId?: string | null
   startDate: string
   targetTurnover: string
+  /** When the system was actually handed over — the date a certificate states. */
+  actualTurnover?: string | null
 }
 
 /* --- Packages & solar system configuration -------------------------------------- */
@@ -146,7 +156,8 @@ export interface Package {
 export type AppointmentType =
   'virtual_consultation' | 'site_survey' | 'installation' | 'maintenance' | 'repair'
 
-export type AppointmentStatus = 'requested' | 'confirmed' | 'dispatched' | 'completed' | 'cancelled'
+export type AppointmentStatus =
+  'requested' | 'confirmed' | 'dispatched' | 'in_progress' | 'completed' | 'cancelled'
 
 export interface Appointment {
   id: string
@@ -166,6 +177,14 @@ export interface Appointment {
      number or a bag of cable belonged to. */
   projectId?: string
   clientId?: string
+  /** The enquiry a public booking came from, when it came from one. */
+  leadId?: string
+  /** The support ticket a repair visit was raised for. */
+  ticketId?: string
+  cancelledReason?: string
+  completedAt?: string
+  signoffName?: string
+  createdAt?: string
 }
 
 /* --- Inventory & serialized assets --------------------------------------------- */
@@ -200,6 +219,8 @@ export interface SerializedAsset {
   installedAt: string
   warrantyYears: number
   warrantyExpiresAt: string
+  /** 'replaced' once a warranty replacement arrives; 'faulty' while it is with the manufacturer. */
+  status?: 'installed' | 'faulty' | 'replaced' | 'removed'
 }
 
 /* --- Finance ------------------------------------------------------------------- */
@@ -222,6 +243,8 @@ export interface Invoice {
   status: InvoiceStatus
   issuedAt: string
   dueAt: string
+  /** What a manually raised invoice is for. The customer reads this. */
+  notes?: string
 }
 
 /** One line of a Bill of Materials, generated from the chosen package. */
@@ -265,6 +288,10 @@ export interface Ticket {
   resolution?: string
   /** When it was closed out — what an average resolution time is measured on. */
   resolvedAt?: string
+  /** Decided at triage: covered by the warranty (true), billable (false), or not yet. */
+  warrantyCovered?: boolean | null
+  /** The customer's 1–5 rating once it is resolved. */
+  satisfactionRating?: number | null
 }
 
 export type WarrantyRequestType = 'registration' | 'transfer'
@@ -292,6 +319,10 @@ export type DocumentKind =
   | 'turnover_certificate'
   | 'inspection_report'
   | 'permit'
+  | 'survey_report'
+  | 'as_built'
+  | 'proof_of_sale'
+  | 'other'
 
 export interface StoredDocument {
   id: string
@@ -329,4 +360,8 @@ export interface AppNotification {
   channel: 'in_app' | 'email' | 'sms'
   read: boolean
   at: string
+  category?: string
+  /** Which table the notification is about, so the bell can open it. */
+  entity?: string
+  entityId?: string
 }

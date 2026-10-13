@@ -1,14 +1,26 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
+import { FormError } from '@/components/ui/FormError'
 import { Progress } from '@/components/ui/Progress'
-import { humanize } from '@/lib/format'
-import { APPOINTMENT_TYPE_LABEL } from '@/lib/labels'
+import { dateTime } from '@/lib/format'
+import {
+  APPOINTMENT_STATUS_LABEL,
+  APPOINTMENT_STATUS_TONE,
+  APPOINTMENT_TYPE_LABEL,
+} from '@/lib/labels'
 import { QueryState } from '@/components/ui/QueryState'
-import { useCompleteJob, useCompleteMilestone, useJob, useOfflineQueue } from '@/lib/queries/field'
+import {
+  clockInFor,
+  useCompleteJob,
+  useCompleteMilestone,
+  useJob,
+  useOfflineQueue,
+  useStartJob,
+} from '@/lib/queries/field'
 
 /* ============================================================================
    FieldJobPage — the job screen a technician works from all day.
@@ -20,13 +32,17 @@ import { useCompleteJob, useCompleteMilestone, useJob, useOfflineQueue } from '@
        → /portal/project       the customer's progress bar moves
        → notifications         milestone email/SMS fires to the client
 
-   Nowhere else in the system can a milestone be marked done. That is
-   deliberate: progress should be reported by the person who actually did the
-   work, standing at the site, not by an office keying in what they were told.
+   Progress should be reported by the person who actually did the work,
+   standing at the site, not by an office keying in what they were told.
 
-   OFFLINE BEHAVIOUR: taps must be queued locally (IndexedDB) and replayed when
-   connectivity returns. Technicians work in areas with poor signal, and a
-   milestone tap that silently fails is worse than no app at all.
+   THE DAY ON ONE SCREEN, IN ORDER
+     1. Start the job     — the visit shows "in progress" to the office and the
+                            customer, and the clock starts for the timesheet
+     2. Work the checklist and move the milestones
+     3. Close the job     — the customer's printed name, the checklist result
+                            and the hours are all recorded in one go
+
+   OFFLINE: every write is queued on the phone and replayed on reconnect.
    ========================================================================== */
 
 const CHECKLISTS: Record<string, string[]> = {
@@ -63,6 +79,56 @@ const CHECKLISTS: Record<string, string[]> = {
     'Mounting hardware inspected for corrosion',
     'Findings recorded and client briefed',
   ],
+  repair: [
+    'Fault reproduced or error code recorded',
+    'System isolated safely before work',
+    'Faulty component identified (serial noted if replaced)',
+    'Repair carried out and connections re-checked',
+    'System re-energised and production confirmed',
+    'Client briefed on what was found and done',
+  ],
+}
+
+/* The ticks are kept on the phone per job, so a reload — or the battery
+   dying on a roof — does not lose the morning's checklist. The result goes
+   into the visit record when the job is closed. */
+const CHECK_KEY = 'solarbros.job-checklist'
+
+function loadChecked(jobId: string): number[] {
+  try {
+    const all = JSON.parse(localStorage.getItem(CHECK_KEY) ?? '{}') as Record<string, number[]>
+    return all[jobId] ?? []
+  } catch {
+    return []
+  }
+}
+
+function saveChecked(jobId: string, indexes: number[] | null) {
+  try {
+    const all = JSON.parse(localStorage.getItem(CHECK_KEY) ?? '{}') as Record<string, number[]>
+    if (indexes === null) delete all[jobId]
+    else all[jobId] = indexes
+    localStorage.setItem(CHECK_KEY, JSON.stringify(all))
+  } catch {
+    // Storage refused: the ticks still work for this visit, they just will
+    // not survive a reload.
+  }
+}
+
+/** Ask the phone where we are, without ever waiting long for it. */
+function currentPosition(): Promise<{ latitude?: number; longitude?: number }> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve({})
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => resolve({}),
+      { timeout: 5000, maximumAge: 60_000 },
+    )
+  })
 }
 
 export function FieldJobPage() {
@@ -70,20 +136,25 @@ export function FieldJobPage() {
   const jobQuery = useJob(jobId)
   const completeMilestone = useCompleteMilestone()
   const completeJob = useCompleteJob()
+  const startJob = useStartJob()
   const [signoffName, setSignoffName] = useState('')
-  const [closed, setClosed] = useState(false)
+  const [closedNote, setClosedNote] = useState<string | null>(null)
   const { isOnline } = useOfflineQueue()
 
-  // Checklist ticks are local for now. They are guidance for the technician
-  // rather than a record anything else reads; a dedicated digital-forms table
-  // lands with that piece of work.
-  const [checked, setChecked] = useState<Set<number>>(new Set())
+  const [checked, setChecked] = useState<Set<number>>(
+    () => new Set(jobId ? loadChecked(jobId) : []),
+  )
   /** The milestone whose write is in flight, so only that row shows a spinner. */
   const [pendingKey, setPendingKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (jobId) saveChecked(jobId, [...checked])
+  }, [jobId, checked])
 
   const job = jobQuery.data?.appointment
   const project = jobQuery.data?.project
   const milestones = project?.milestones ?? []
+  const clockIn = jobId ? clockInFor(jobId) : undefined
 
   if (jobQuery.isLoading || jobQuery.error || !job) {
     return (
@@ -102,6 +173,8 @@ export function FieldJobPage() {
 
   const checklist = CHECKLISTS[job.type] ?? CHECKLISTS.installation
   const progress = checked.size / checklist.length
+  const isClosed = job.status === 'completed' || closedNote !== null
+  const isStarted = job.status === 'in_progress' || Boolean(clockIn)
 
   function toggleItem(index: number) {
     setChecked((previous) => {
@@ -119,9 +192,6 @@ export function FieldJobPage() {
    * fires database triggers that move the customer's progress bar, email them,
    * raise the next staged invoice at the billing stages, and close the project
    * at turnover. None of that logic is in this file.
-   *
-   * The write sets an ABSOLUTE state rather than "advance one", which is what
-   * makes it safe to replay from the offline queue.
    */
   function cycleMilestone(milestoneId: string, currentStatus: string, label: string) {
     const next =
@@ -138,6 +208,38 @@ export function FieldJobPage() {
     )
   }
 
+  async function handleStart() {
+    if (!job) return
+    const position = await currentPosition()
+    startJob.mutate({ appointmentId: job.id, projectId: job.projectId ?? null, ...position })
+  }
+
+  function handleClose() {
+    if (!job) return
+    /* The checklist result goes onto the visit record, where the office and
+       the customer can both read it, rather than staying on this phone. */
+    const done = checklist.filter((_, index) => checked.has(index))
+    const missed = checklist.filter((_, index) => !checked.has(index))
+    const summary =
+      `Checklist ${done.length}/${checklist.length} completed on site.` +
+      (missed.length > 0 ? ` Not done: ${missed.join('; ')}.` : '')
+    const notes = job.notes ? `${job.notes}\n\n${summary}` : summary
+
+    completeJob.mutate(
+      { appointmentId: job.id, projectId: job.projectId ?? null, signoffName, notes },
+      {
+        onSuccess: (result) => {
+          saveChecked(job.id, null)
+          setClosedNote(
+            result?.queued
+              ? `Closed on this phone and signed by ${signoffName}. It will reach the office when you have signal.`
+              : `Job closed and signed by ${signoffName}. The customer can see it as completed.`,
+          )
+        },
+      },
+    )
+  }
+
   return (
     <div className="stack">
       <Link to="/field" className="small muted">
@@ -149,13 +251,21 @@ export function FieldJobPage() {
         <CardBody>
           <div className="row row--between">
             <span className="strong">{job.timeSlot}</span>
-            <Badge tone="warning">{humanize(job.status)}</Badge>
+            <Badge tone={APPOINTMENT_STATUS_TONE[job.status]}>
+              {APPOINTMENT_STATUS_LABEL[job.status]}
+            </Badge>
           </div>
           <h2 style={{ fontSize: 'var(--text-lg)', marginTop: 'var(--space-2)' }}>
             {APPOINTMENT_TYPE_LABEL[job.type]}
           </h2>
           <p className="strong">{job.clientName}</p>
-          <p className="small muted">📍 {job.address}</p>
+          <p className="small muted">📍 {job.address || 'Address not recorded — call ahead'}</p>
+          {project && <p className="xs dim">Project {project.reference}</p>}
+          {job.notes && (
+            <p className="small" style={{ marginTop: 'var(--space-2)', whiteSpace: 'pre-wrap' }}>
+              {job.notes}
+            </p>
+          )}
 
           <div className="row" style={{ marginTop: 'var(--space-3)', gap: 'var(--space-2)' }}>
             <a
@@ -173,6 +283,29 @@ export function FieldJobPage() {
               📞 Call
             </a>
           </div>
+
+          {/* ------------------------------------------- ARRIVED ON SITE */}
+          {!isClosed && (
+            <div style={{ marginTop: 'var(--space-4)' }}>
+              {isStarted ? (
+                <p className="xs dim">
+                  {clockIn
+                    ? `On site since ${dateTime(clockIn.at)} — your hours stop when you close the job.`
+                    : 'In progress.'}
+                </p>
+              ) : (
+                <Button
+                  variant="primary"
+                  block
+                  disabled={startJob.isPending}
+                  onClick={() => void handleStart()}
+                >
+                  {startJob.isPending ? 'Starting…' : '▶ I have arrived — start the job'}
+                </Button>
+              )}
+              <FormError error={startJob.error} />
+            </div>
+          )}
         </CardBody>
       </Card>
 
@@ -193,12 +326,13 @@ export function FieldJobPage() {
               <div
                 key={item}
                 className={`checklist__item${checked.has(index) ? ' is-done' : ''}`}
-                onClick={() => toggleItem(index)}
+                onClick={() => !isClosed && toggleItem(index)}
                 role="checkbox"
                 aria-checked={checked.has(index)}
+                aria-disabled={isClosed}
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  if ((e.key === 'Enter' || e.key === ' ') && !isClosed) {
                     e.preventDefault()
                     toggleItem(index)
                   }
@@ -213,147 +347,96 @@ export function FieldJobPage() {
           </div>
 
           <p className="xs dim" style={{ marginTop: 'var(--space-3)' }}>
-            Digital forms replace the paper checklists. Every tick is timestamped and attributed to
-            you.
+            Your ticks are kept on this phone until you close the job, then recorded on the visit
+            for the office and the customer.
           </p>
         </CardBody>
       </Card>
 
-      {/* ---------------------------------------- MILESTONE UPDATER */}
-      <Card>
-        <CardBody>
-          <h3 style={{ fontSize: 'var(--text-base)', marginBottom: 'var(--space-2)' }}>
-            Project milestones
-          </h3>
-          <p className="xs dim" style={{ marginBottom: 'var(--space-3)' }}>
-            Tap to advance. The client sees this update on their portal immediately.
-          </p>
-
-          <div className="stack stack--sm">
-            {milestones.map((milestone) => {
-              const id = milestone.id
-              const busy = pendingKey === id
-              return (
-                <button
-                  key={milestone.key}
-                  className="row row--between"
-                  // Without a row id there is nothing to update. Disabling is
-                  // honest; firing a write that matches no rows is not.
-                  disabled={busy || !id}
-                  onClick={() => id && cycleMilestone(id, milestone.status, milestone.label)}
-                  style={{
-                    width: '100%',
-                    padding: 'var(--space-3)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius)',
-                    background:
-                      milestone.status === 'done'
-                        ? 'var(--success-bg)'
-                        : milestone.status === 'in_progress'
-                          ? 'var(--warning-bg)'
-                          : 'var(--bg-surface)',
-                    textAlign: 'left',
-                    opacity: busy ? 0.6 : 1,
-                  }}
-                >
-                  <span className="small strong">{milestone.label}</span>
-                  <span>
-                    {busy && '⏳'}
-                    {!busy && milestone.status === 'done' && '✅'}
-                    {!busy && milestone.status === 'in_progress' && '🔨'}
-                    {!busy && milestone.status === 'pending' && '⬜'}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {completeMilestone.error && (
-            <p
-              className="small"
-              style={{
-                marginTop: 'var(--space-3)',
-                padding: 'var(--space-3)',
-                background: 'var(--danger-bg)',
-                color: 'var(--danger-fg)',
-                borderRadius: 'var(--radius)',
-              }}
-              role="alert"
-            >
-              {(completeMilestone.error as Error).message}
+      {/* ---------------------------------------- MILESTONE UPDATER
+          Only a job with a project has stages. A survey or a consultation
+          happens before there is anything to build. */}
+      {project && (
+        <Card>
+          <CardBody>
+            <h3 style={{ fontSize: 'var(--text-base)', marginBottom: 'var(--space-2)' }}>
+              Project milestones
+            </h3>
+            <p className="xs dim" style={{ marginBottom: 'var(--space-3)' }}>
+              Tap to advance. The client sees this update on their portal immediately.
             </p>
-          )}
 
-          {/* A technician needs to know whether the office has actually seen the
-              update, not just whether the button worked. */}
-          {!isOnline && (
-            <p
-              className="xs"
-              style={{
-                marginTop: 'var(--space-3)',
-                padding: 'var(--space-2) var(--space-3)',
-                background: 'var(--warning-bg)',
-                color: 'var(--warning-fg)',
-                borderRadius: 'var(--radius-sm)',
-              }}
-            >
-              Offline — your taps are saved on this phone and will send themselves when you have
-              signal.
-            </p>
-          )}
-        </CardBody>
-      </Card>
+            <div className="stack stack--sm">
+              {milestones.map((milestone) => {
+                const id = milestone.id
+                const busy = pendingKey === id
+                return (
+                  <button
+                    key={milestone.key}
+                    className="row row--between"
+                    // Without a row id there is nothing to update. Disabling is
+                    // honest; firing a write that matches no rows is not.
+                    disabled={busy || !id}
+                    onClick={() => id && cycleMilestone(id, milestone.status, milestone.label)}
+                    style={{
+                      width: '100%',
+                      padding: 'var(--space-3)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)',
+                      background:
+                        milestone.status === 'done'
+                          ? 'var(--success-bg)'
+                          : milestone.status === 'in_progress'
+                            ? 'var(--warning-bg)'
+                            : milestone.status === 'blocked'
+                              ? 'var(--danger-bg)'
+                              : 'var(--bg-surface)',
+                      textAlign: 'left',
+                      opacity: busy ? 0.6 : 1,
+                    }}
+                  >
+                    <span className="small strong">{milestone.label}</span>
+                    <span>
+                      {busy && '⏳'}
+                      {!busy && milestone.status === 'done' && '✅'}
+                      {!busy && milestone.status === 'in_progress' && '🔨'}
+                      {!busy && milestone.status === 'pending' && '⬜'}
+                      {!busy && milestone.status === 'blocked' && '⛔'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <FormError error={completeMilestone.error} />
+
+            {/* A technician needs to know whether the office has actually seen
+                the update, not just whether the button worked. */}
+            {!isOnline && (
+              <p
+                className="xs"
+                style={{
+                  marginTop: 'var(--space-3)',
+                  padding: 'var(--space-2) var(--space-3)',
+                  background: 'var(--warning-bg)',
+                  color: 'var(--warning-fg)',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+              >
+                Offline — your taps are saved on this phone and will send themselves when you have
+                signal.
+              </p>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       {/* ------------------------------------------- CLIENT SIGN-OFF */}
       <Card>
         <CardBody>
           <h3 style={{ fontSize: 'var(--text-base)' }}>Client sign-off</h3>
-          <p className="xs dim" style={{ marginBlock: 'var(--space-2)' }}>
-            Required before the job can be closed. Captures a legally meaningful acceptance of the
-            work.
-          </p>
 
-          <div
-            style={{
-              height: 120,
-              border: '2px dashed var(--border-strong)',
-              borderRadius: 'var(--radius)',
-              display: 'grid',
-              placeItems: 'center',
-              color: 'var(--text-muted)',
-              fontSize: 'var(--text-sm)',
-            }}
-          >
-            ✍️ Signature capture area
-          </div>
-
-          <div className="field" style={{ marginTop: 'var(--space-3)' }}>
-            <input
-              className="input"
-              placeholder="Client name (printed)"
-              value={signoffName}
-              onChange={(e) => setSignoffName(e.target.value)}
-              disabled={closed}
-            />
-          </div>
-
-          {completeJob.error && (
-            <p
-              role="alert"
-              className="small"
-              style={{
-                marginTop: 'var(--space-2)',
-                padding: 'var(--space-2) var(--space-3)',
-                background: 'var(--danger-bg)',
-                color: 'var(--danger-fg)',
-                borderRadius: 'var(--radius-sm)',
-              }}
-            >
-              {completeJob.error.message}
-            </p>
-          )}
-
-          {closed ? (
+          {isClosed ? (
             <p
               className="small"
               style={{
@@ -364,25 +447,45 @@ export function FieldJobPage() {
                 borderRadius: 'var(--radius)',
               }}
             >
-              ✓ Job closed and signed by {signoffName}. The customer can see it as completed.
+              ✓{' '}
+              {closedNote ??
+                `Completed${job.signoffName ? ` and signed by ${job.signoffName}` : ''}${
+                  job.completedAt ? ` on ${dateTime(job.completedAt)}` : ''
+                }.`}
             </p>
           ) : (
-            <Button
-              variant="primary"
-              block
-              size="lg"
-              style={{ marginTop: 'var(--space-3)' }}
-              disabled={completeJob.isPending || signoffName.trim().length < 2}
-              onClick={() =>
-                job &&
-                completeJob.mutate(
-                  { appointmentId: job.id, signoffName },
-                  { onSuccess: () => setClosed(true) },
-                )
-              }
-            >
-              {completeJob.isPending ? 'Closing…' : 'Complete job & sync'}
-            </Button>
+            <>
+              {/* A printed name, given by the customer standing in front of the
+                  technician, recorded with the server's timestamp. It replaced a
+                  "signature capture" box that captured nothing. */}
+              <p className="xs dim" style={{ marginBlock: 'var(--space-2)' }}>
+                Ask the customer to check the work, then type the name they give you. Their name and
+                the time are recorded against this visit as their acceptance.
+              </p>
+
+              <div className="field" style={{ marginTop: 'var(--space-3)' }}>
+                <input
+                  className="input"
+                  placeholder="Customer's full name"
+                  value={signoffName}
+                  onChange={(e) => setSignoffName(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+
+              <FormError error={completeJob.error} />
+
+              <Button
+                variant="primary"
+                block
+                size="lg"
+                style={{ marginTop: 'var(--space-3)' }}
+                disabled={completeJob.isPending || signoffName.trim().length < 2}
+                onClick={handleClose}
+              >
+                {completeJob.isPending ? 'Closing…' : 'Complete job & sync'}
+              </Button>
+            </>
           )}
         </CardBody>
       </Card>

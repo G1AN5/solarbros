@@ -10,13 +10,25 @@ import { Tabs } from '@/components/ui/Tabs'
 import { currency, currencyCompact, humanize, relative } from '@/lib/format'
 import { LEAD_STAGE_LABEL, LEAD_STAGE_TONE, PIPELINE_ORDER } from '@/lib/labels'
 import { QueryState } from '@/components/ui/QueryState'
-import { useCreateLead, useLeads, useUpdateLead, useUpdateLeadStage } from '@/lib/queries/crm'
+import {
+  useAssignLead,
+  useCreateLead,
+  useDeleteLead,
+  useLeads,
+  useUpdateLead,
+  useUpdateLeadStage,
+} from '@/lib/queries/crm'
+import { useStaff } from '@/lib/queries/admin'
+import { useEnquiry } from '@/lib/queries/enquiries'
 import { usePricingConfig } from '@/lib/queries/settings'
 import { systemPrice, type PricingConfig } from '@/lib/solar-estimator'
 import type { Lead, LeadStage } from '@/types/domain'
 import { Modal } from '@/components/ui/Modal'
 import { FormError } from '@/components/ui/FormError'
 import { datedFilename, downloadCsv } from '@/lib/csv'
+import { useAuth } from '@/app/auth/useAuth'
+import { Link } from 'react-router-dom'
+import { LeadDetails } from './LeadDetails'
 
 /* ============================================================================
    CrmPipelinePage — Sales & CRM module.
@@ -95,6 +107,19 @@ export function CrmPipelinePage() {
      is not a lead. */
   const updateLead = useUpdateLead()
   const [editing, setEditing] = useState<Lead | null>(null)
+
+  /* Everything the lead sent us and everything since — the same view the
+     Enquiries page shows, so the two never disagree about a person. The CRM
+     card used to show a name, a stage and a score and nothing else. */
+  const [viewingId, setViewingId] = useState<string | null>(null)
+  const viewing = useEnquiry(viewingId)
+
+  const { user } = useAuth()
+  const assignLead = useAssignLead()
+  const deleteLead = useDeleteLead()
+  const owners = (useStaff().data ?? []).filter(
+    (person) => person.isActive && (person.role === 'sales' || person.role === 'admin'),
+  )
 
   /* THE BOARD HAD NO DRAG AND DROP. It rendered columns and cards and nothing
      else — no `draggable`, no handlers — so the obvious gesture did nothing and
@@ -187,6 +212,9 @@ export function CrmPipelinePage() {
       header: '',
       cell: (lead) => (
         <div className="row">
+          <Button variant="ghost" size="sm" onClick={() => setViewingId(lead.id)}>
+            Details
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setEditing(lead)}>
             Edit
           </Button>
@@ -370,15 +398,24 @@ export function CrmPipelinePage() {
                         drop cannot be operated from a keyboard, and does not
                         work by touch at all — so this is not a fallback, it is
                         the route most people on this board will actually use. */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      block
-                      style={{ marginTop: 'var(--space-2)' }}
-                      onClick={() => setWorking(lead)}
-                    >
-                      Move stage
-                    </Button>
+                    <div className="row" style={{ marginTop: 'var(--space-2)', gap: 4 }}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        style={{ flex: 1 }}
+                        onClick={() => setViewingId(lead.id)}
+                      >
+                        Details
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        style={{ flex: 1 }}
+                        onClick={() => setWorking(lead)}
+                      >
+                        Move
+                      </Button>
+                    </div>
                   </article>
                 ))}
 
@@ -415,11 +452,11 @@ export function CrmPipelinePage() {
         <CardBody>
           <h4>How lead scoring works</h4>
           <p className="small muted" style={{ marginTop: 'var(--space-2)', maxWidth: '80ch' }}>
-            The 0–100 score weights monthly bill size, whether a roof area was supplied, source
-            quality (a referral outranks an anonymous estimator submission), service-area proximity,
-            and how quickly the prospect responded. Scores above 85 should be contacted the same
-            day. The weighting lives in one place so sales management can tune it without a code
-            change.
+            The 0–100 score adds points for the size of the monthly bill, where the lead came from
+            (a referral outranks an anonymous estimator submission), whether they are in the service
+            area, own the property and make the decision, and whether the system is a large one.
+            Scores above 85 should be contacted the same day. Every weight is in Business Settings →
+            Scoring, so sales management can tune it without a code change.
           </p>
         </CardBody>
       </Card>
@@ -466,6 +503,43 @@ export function CrmPipelinePage() {
                 <span className="muted small">Estimated system</span>
                 <span className="small strong">{working.estimatedKw} kW</span>
               </div>
+            </div>
+
+            {/* Ownership is changed on its own, not as part of editing the
+                lead, so it never moves by accident. */}
+            <div className="field">
+              <label className="field__label" htmlFor="lead-owner">
+                Owner
+              </label>
+              <select
+                id="lead-owner"
+                className="select"
+                value={working.assignedToId ?? ''}
+                disabled={assignLead.isPending}
+                onChange={(e) =>
+                  assignLead.mutate(
+                    { id: working.id, ownerId: e.target.value || null },
+                    {
+                      onSuccess: () => {
+                        const owner = owners.find((o) => o.id === e.target.value)
+                        setWorking({
+                          ...working,
+                          assignedToId: e.target.value || undefined,
+                          assignedTo: owner?.fullName ?? 'Unassigned',
+                        })
+                      },
+                    },
+                  )
+                }
+              >
+                <option value="">Unassigned</option>
+                {owners.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    {owner.fullName}
+                  </option>
+                ))}
+              </select>
+              <FormError error={assignLead.error} />
             </div>
 
             <div className="field">
@@ -520,8 +594,10 @@ export function CrmPipelinePage() {
                 email: String(form.get('email') ?? ''),
                 phone: String(form.get('phone') ?? ''),
                 location: String(form.get('location') ?? ''),
+                address: String(form.get('address') ?? ''),
+                notes: String(form.get('notes') ?? ''),
                 monthlyBill: form.get('bill') ? Number(form.get('bill')) : undefined,
-                source: 'walk_in',
+                source: String(form.get('source') ?? 'walk_in') as Lead['source'],
               },
               { onSuccess: () => setAdding(false) },
             )
@@ -565,6 +641,30 @@ export function CrmPipelinePage() {
               </label>
               <input id="new-lead-bill" name="bill" className="input" type="number" min="0" />
             </div>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="new-lead-address">
+              Property address <span className="dim">(for the survey)</span>
+            </label>
+            <input id="new-lead-address" name="address" className="input" />
+          </div>
+          <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+            <div className="field" style={{ flex: 1 }}>
+              <label className="field__label" htmlFor="new-lead-source">
+                How did they reach us?
+              </label>
+              <select id="new-lead-source" name="source" className="select" defaultValue="walk_in">
+                <option value="walk_in">Walk-in or phone call</option>
+                <option value="referral">Referral</option>
+                <option value="facebook">Facebook</option>
+              </select>
+            </div>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="new-lead-notes">
+              What they want <span className="dim">(optional)</span>
+            </label>
+            <textarea id="new-lead-notes" name="notes" className="textarea" rows={2} />
           </div>
 
           <FormError error={createLead.error} />
@@ -643,10 +743,16 @@ export function CrmPipelinePage() {
               <label className="field__label" htmlFor="lead-address">
                 Full address <span className="dim">(for the survey)</span>
               </label>
-              <input id="lead-address" name="address" className="input" />
-              <span className="field__hint">
-                Leave blank to keep what is on file. The surveyor needs enough to find the roof.
-              </span>
+              {/* Pre-filled. It used to be empty with a hint saying "leave
+                  blank to keep what is on file" — while the save wrote the
+                  blank, so correcting a phone number erased the address. */}
+              <input
+                id="lead-address"
+                name="address"
+                className="input"
+                defaultValue={editing.address}
+              />
+              <span className="field__hint">The surveyor needs enough to find the roof.</span>
             </div>
 
             <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
@@ -690,7 +796,57 @@ export function CrmPipelinePage() {
               Stage and score are not edited here. Stage has its own action because moving it has
               consequences, and the score is recomputed by the database from the figures above.
             </p>
+
+            {user?.role === 'admin' && (
+              <div
+                style={{
+                  marginTop: 'var(--space-2)',
+                  paddingTop: 'var(--space-3)',
+                  borderTop: '1px solid var(--border)',
+                }}
+              >
+                <FormError error={deleteLead.error} />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={deleteLead.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Delete ${editing.name} permanently? A lead with quotations or a contract cannot be deleted — mark it lost instead.`,
+                      )
+                    ) {
+                      deleteLead.mutate({ id: editing.id }, { onSuccess: () => setEditing(null) })
+                    }
+                  }}
+                >
+                  Delete this lead
+                </Button>
+              </div>
+            )}
           </form>
+        )}
+      </Modal>
+
+      {/* ------------------------------------------------- FULL DETAILS */}
+      <Modal
+        open={viewingId !== null}
+        onClose={() => setViewingId(null)}
+        title={viewing.data ? viewing.data.name : 'Lead'}
+      >
+        {viewing.isLoading && <p className="small muted">Loading…</p>}
+        {viewing.data && (
+          <div className="stack">
+            <LeadDetails enquiry={viewing.data} />
+            <Link
+              className="btn btn--primary btn--block"
+              to={`/admin/quotes?lead=${viewing.data.id}`}
+              onClick={() => setViewingId(null)}
+            >
+              Prepare a quotation
+            </Link>
+          </div>
         )}
       </Modal>
     </>

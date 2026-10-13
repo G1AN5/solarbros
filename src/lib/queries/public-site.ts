@@ -80,15 +80,18 @@ export function useCompany(): CompanyProfile {
   return {
     name: settingText(settings, 'company.name', 'SolarBros'),
     tagline: settingText(settings, 'company.tagline', 'Power your home or business with the sun.'),
-    email: settingText(settings, 'company.email', 'hello@solarbros.ph'),
-    phone: settingText(settings, 'company.phone', '+63 917 555 0142'),
+    /* No placeholder contact details. These used to fall back to an invented
+       number and address, which is what a visitor saw for the first moment of
+       every page load — and dialled, if they were quick. Empty is hidden. */
+    email: settingText(settings, 'company.email', ''),
+    phone: settingText(settings, 'company.phone', ''),
     address: settingText(
       settings,
       'company.address',
       'Warehouse Unit D ACSIE #12 Main Road, Km. 16 West Service Road, South Superhighway, Paranaque, Metro Manila 1700',
     ),
     hours: settingText(settings, 'company.hours', 'Mon-Sat, 8:00 AM - 6:00 PM'),
-    facebook: settingText(settings, 'company.facebook', 'facebook.com/solarbrosph'),
+    facebook: settingText(settings, 'company.facebook', ''),
     serviceAreas: settingList(settings, 'company.service_areas', [
       'Paranaque',
       'Metro Manila',

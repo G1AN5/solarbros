@@ -1,18 +1,25 @@
+import { useState } from 'react'
+
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DownloadButton } from '@/components/ui/DownloadButton'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { FormError } from '@/components/ui/FormError'
+import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatTile } from '@/components/ui/StatTile'
 import { date, humanize, relative } from '@/lib/format'
 import { WARRANTY_STATUS_TONE } from '@/lib/labels'
 import { QueryState } from '@/components/ui/QueryState'
 import {
+  type WarrantyRequestRow,
   useDocumentsByKind,
   useReviewWarrantyRequest,
   useWarrantyRequests,
 } from '@/lib/queries/operations'
+import { settingNum, useSettings } from '@/lib/queries/settings'
+import { useNow } from '@/lib/use-now'
 import { useAuth } from '@/app/auth/useAuth'
 
 /* ============================================================================
@@ -45,6 +52,22 @@ export function WarrantyApprovalsPage() {
   const pending = requests.filter((r) => r.status === 'pending')
   const processed = requests.filter((r) => r.status !== 'pending')
 
+  /* The review target is a setting, and was a typed "5-day SLA" that nothing
+     measured. A request older than it is flagged. */
+  const reviewDays = settingNum(useSettings().data, 'support.warranty_review_days', 5)
+  const now = useNow()
+  const overdue = (r: WarrantyRequestRow) =>
+    (now - new Date(r.submittedAt).getTime()) / 86_400_000 > reviewDays
+  const overdueCount = pending.filter(overdue).length
+
+  const monthStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), 1).getTime()
+  const approvedThisMonth = requests.filter(
+    (r) =>
+      r.status === 'approved' && r.reviewedAt && new Date(r.reviewedAt).getTime() >= monthStart,
+  ).length
+
+  const [rejecting, setRejecting] = useState<WarrantyRequestRow | null>(null)
+
   return (
     <>
       <PageHeader
@@ -56,8 +79,12 @@ export function WarrantyApprovalsPage() {
         <StatTile
           label="Pending review"
           value={String(pending.length)}
-          delta="5-day SLA"
-          direction={pending.length ? 'up' : 'flat'}
+          delta={
+            overdueCount
+              ? `${overdueCount} past the ${reviewDays}-day target`
+              : `${reviewDays}-day review target`
+          }
+          direction={overdueCount ? 'up' : 'flat'}
           invertDelta
         />
         <StatTile
@@ -68,10 +95,7 @@ export function WarrantyApprovalsPage() {
           label="Registrations"
           value={String(requests.filter((r) => r.type === 'registration').length)}
         />
-        <StatTile
-          label="Approved this month"
-          value={String(requests.filter((r) => r.status === 'approved').length)}
-        />
+        <StatTile label="Approved this month" value={String(approvedThisMonth)} />
       </div>
 
       <Card style={{ marginBottom: 'var(--space-6)' }}>
@@ -111,6 +135,7 @@ export function WarrantyApprovalsPage() {
                               {humanize(request.type)}
                             </Badge>
                             <span className="strong">{request.clientName}</span>
+                            {overdue(request) && <Badge tone="danger">Overdue</Badge>}
                           </div>
                           <div className="small muted" style={{ marginTop: 'var(--space-2)' }}>
                             {request.projectReference}
@@ -127,6 +152,20 @@ export function WarrantyApprovalsPage() {
                               }}
                             >
                               ➜ Transfer to: <strong>{request.transferToName}</strong>
+                              {[request.transferToEmail, request.transferToPhone]
+                                .filter(Boolean)
+                                .join(' · ') && (
+                                <span>
+                                  {' '}
+                                  ·{' '}
+                                  {[request.transferToEmail, request.transferToPhone]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </span>
+                              )}
+                              {request.expectedTransferDate && (
+                                <span> · from {date(request.expectedTransferDate)}</span>
+                              )}
                             </div>
                           )}
                           <div className="xs dim" style={{ marginTop: 'var(--space-2)' }}>
@@ -146,15 +185,9 @@ export function WarrantyApprovalsPage() {
                             variant="outline"
                             size="sm"
                             disabled={review.isPending}
-                            onClick={() =>
-                              review.mutate({
-                                id: request.id,
-                                approve: false,
-                                reviewerId: user?.id ?? '',
-                              })
-                            }
+                            onClick={() => setRejecting(request)}
                           >
-                            Reject
+                            Reject…
                           </Button>
                           <Button
                             variant="primary"
@@ -192,14 +225,22 @@ export function WarrantyApprovalsPage() {
       <Card>
         <CardHeader title="Recently processed" />
         <CardBody>
+          <FormError error={review.error} />
+          {processed.length === 0 && <p className="small muted">Nothing decided yet.</p>}
           <div className="stack stack--sm">
             {processed.map((request) => (
               <div key={request.id} className="row row--between">
                 <div>
                   <span className="small strong">{request.clientName}</span>
                   <span className="xs dim" style={{ display: 'block' }}>
-                    {humanize(request.type)} · {date(request.submittedAt)}
+                    {humanize(request.type)} · submitted {date(request.submittedAt)}
+                    {request.reviewedAt ? ` · decided ${date(request.reviewedAt)}` : ''}
                   </span>
+                  {request.reviewNotes && (
+                    <span className="xs dim" style={{ display: 'block' }}>
+                      {request.reviewNotes}
+                    </span>
+                  )}
                 </div>
                 <Badge tone={WARRANTY_STATUS_TONE[request.status]}>
                   {humanize(request.status)}
@@ -209,6 +250,56 @@ export function WarrantyApprovalsPage() {
           </div>
         </CardBody>
       </Card>
+
+      {/* ------------------------------------------------ REJECTING */}
+      <Modal
+        open={rejecting !== null}
+        onClose={() => {
+          setRejecting(null)
+          review.reset()
+        }}
+        title={rejecting ? `Reject · ${rejecting.clientName}` : 'Reject'}
+      >
+        {rejecting && (
+          <form
+            className="stack"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const form = new FormData(event.currentTarget)
+              review.mutate(
+                {
+                  id: rejecting.id,
+                  approve: false,
+                  reviewerId: user?.id ?? '',
+                  notes: String(form.get('notes') ?? ''),
+                },
+                { onSuccess: () => setRejecting(null) },
+              )
+            }}
+          >
+            <div className="field">
+              <label className="field__label" htmlFor="warranty-reject">
+                Why
+              </label>
+              <textarea
+                id="warranty-reject"
+                name="notes"
+                className="textarea"
+                rows={3}
+                required
+                placeholder="The proof of sale does not name the new owner — please upload the deed of sale."
+              />
+              <span className="field__hint">
+                The customer is told, and can submit again with what is missing.
+              </span>
+            </div>
+            <FormError error={review.error} />
+            <Button type="submit" variant="primary" block disabled={review.isPending}>
+              {review.isPending ? 'Saving…' : 'Reject the request'}
+            </Button>
+          </form>
+        )}
+      </Modal>
     </>
   )
 }

@@ -16,7 +16,8 @@ import {
   useSaveStockItem,
   useStock,
 } from '@/lib/queries/inventory-finance'
-import { useUpdateStockThresholds } from '@/lib/queries/settings'
+import { settingNum, useSettings, useUpdateStockThresholds } from '@/lib/queries/settings'
+import { stockLevel } from '@/lib/stock'
 import { useAuth } from '@/app/auth/useAuth'
 import type { StockItem } from '@/types/domain'
 import type { StockItemInput } from '@/lib/queries/inventory-finance'
@@ -120,7 +121,12 @@ export function InventoryPage() {
   const [adjusting, setAdjusting] = useState(false)
 
   const totalValue = stock.reduce((sum, item) => sum + item.onHand * item.unitCost, 0)
-  const lowStock = stock.filter((item) => item.onHand - item.reserved < item.reorderPoint)
+  const warningMultiplier = settingNum(
+    useSettings().data,
+    'inventory.low_stock_warning_multiplier',
+    1.5,
+  )
+  const lowStock = stock.filter((item) => stockLevel(item, warningMultiplier) === 'reorder')
   const oversold = stock.filter((item) => item.onHand - item.reserved < 0)
 
   const columns: Column<StockItem>[] = [
@@ -227,9 +233,10 @@ export function InventoryPage() {
     {
       header: 'Status',
       cell: (item) => {
-        const available = item.onHand - item.reserved
-        if (available < 0) return <Badge tone="danger">Oversold</Badge>
-        if (available < item.reorderPoint) return <Badge tone="warning">Reorder</Badge>
+        const level = stockLevel(item, warningMultiplier)
+        if (level === 'oversold') return <Badge tone="danger">Oversold</Badge>
+        if (level === 'reorder') return <Badge tone="warning">Reorder</Badge>
+        if (level === 'low') return <Badge tone="info">Running low</Badge>
         return <Badge tone="success">Healthy</Badge>
       },
     },

@@ -10,7 +10,13 @@ import { QueryState } from '@/components/ui/QueryState'
 import { TicketThread } from '@/components/ui/TicketThread'
 import { humanize, relative } from '@/lib/format'
 import { TICKET_PRIORITY_TONE, TICKET_STATUS_TONE } from '@/lib/labels'
-import { useMyProject, useMyTickets, useRaiseTicket } from '@/lib/queries/client-portal'
+import {
+  useMyProject,
+  useMyTickets,
+  useRaiseTicket,
+  useRateTicket,
+} from '@/lib/queries/client-portal'
+import { useCompany } from '@/lib/queries/public-site'
 import { useClientUpload } from '@/lib/queries/storage'
 import type { Ticket, TicketCategory, TicketPriority } from '@/types/domain'
 
@@ -55,6 +61,11 @@ export function ClientTicketsPage() {
   const project = useMyProject().data
   const uploadPhoto = useClientUpload()
   const photosRef = useRef<HTMLInputElement>(null)
+
+  /* Once a ticket is resolved the customer can say how it went. The column
+     existed; nothing asked. */
+  const rate = useRateTicket()
+  const company = useCompany()
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -272,6 +283,30 @@ export function ClientTicketsPage() {
                         <strong>What we did:</strong> {ticket.resolution}
                       </p>
                     )}
+
+                    {(ticket.status === 'resolved' || ticket.status === 'closed') && (
+                      <div
+                        className="row row--wrap"
+                        style={{ marginTop: 'var(--space-3)', gap: 4 }}
+                      >
+                        <span className="xs dim">
+                          {ticket.satisfactionRating ? 'Your rating:' : 'How did we do?'}
+                        </span>
+                        {[1, 2, 3, 4, 5].map((stars) => (
+                          <button
+                            key={stars}
+                            type="button"
+                            className="star-button"
+                            aria-label={`${stars} star${stars === 1 ? '' : 's'}`}
+                            aria-pressed={(ticket.satisfactionRating ?? 0) >= stars}
+                            disabled={rate.isPending}
+                            onClick={() => rate.mutate({ ticketId: ticket.id, rating: stars })}
+                          >
+                            {(ticket.satisfactionRating ?? 0) >= stars ? '★' : '☆'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <Button variant="outline" size="sm" onClick={() => setReading(ticket)}>
                     View thread
@@ -281,6 +316,7 @@ export function ClientTicketsPage() {
             </Card>
           ))}
         </div>
+        <FormError error={rate.error} />
       </QueryState>
 
       <Card style={{ marginTop: 'var(--space-6)' }}>
@@ -290,9 +326,16 @@ export function ClientTicketsPage() {
             <div>
               <h4>System completely down?</h4>
               <p className="small muted" style={{ marginTop: 'var(--space-1)' }}>
-                Mark the ticket <strong>Urgent</strong> — those are triaged within two hours during
-                business hours. For anything involving sparks, burning smells or water ingress,
-                switch off your AC disconnect and call us directly on +63 917 555 0142.
+                Mark the ticket <strong>Urgent</strong> — those are looked at first during business
+                hours. For anything involving sparks, burning smells or water ingress, switch off
+                your AC disconnect and call us directly
+                {company.phone ? (
+                  <>
+                    {' '}
+                    on <a href={`tel:${company.phone.replace(/\s+/g, '')}`}>{company.phone}</a>
+                  </>
+                ) : null}
+                .
               </p>
             </div>
           </div>

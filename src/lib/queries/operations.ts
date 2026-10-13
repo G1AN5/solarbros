@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { toAppointment, toProject, toTicket } from './mappers'
-import { readableDbError, throwReadable } from '@/lib/db-error'
+import { assertWritten, readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
 import type { Appointment, AppointmentType, Project, Ticket } from '@/types/domain'
@@ -106,7 +106,7 @@ export function useUpdateMilestone() {
       /* `completed_by` is deliberately NOT sent. Migration 0027 fills it from
          the session, so a milestone cannot be credited to a colleague — the
          same reasoning as payments in 0022 and contracts in 0023. */
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('project_milestones')
         .update({
           status: input.status,
@@ -116,6 +116,7 @@ export function useUpdateMilestone() {
           note: input.note ?? null,
         })
         .eq('id', input.milestoneId)
+        .select('id')
 
       if (error) {
         /* The state machine raises sentences written for the person holding the
@@ -125,6 +126,11 @@ export function useUpdateMilestone() {
         if (error.code === '42501') throw new Error(error.message)
         throw readableDbError(error)
       }
+      // A role that may not move stages gets zero rows back, not an error.
+      assertWritten(
+        data,
+        'Only the project engineer, an administrator or the crew on this job can move its stages.',
+      )
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ops'] })
@@ -183,114 +189,9 @@ export function useProjectGate(projectId?: string) {
   })
 }
 
-/* ============================================================================
-   PERMITS · the external-party proxy pattern
-   ----------------------------------------------------------------------------
-   The city hall and the utility do not use this system. A project engineer
-   records their decision on their behalf, and the record captures WHO recorded
-   it and the reference number that makes it verifiable later. The trigger in
-   0008 writes that to the audit log at 'warning' severity, because "the utility
-   approved this" and "an employee said the utility approved this" are different
-   claims.
-   ========================================================================== */
-
-export interface PermitRecord {
-  id: string
-  projectId: string
-  permitType: string
-  authority: string
-  status: string
-  submittedAt: string | null
-  decidedAt: string | null
-  externalReference: string | null
-  recordedBy: string | null
-  recorderName: string | null
-  feeAmount: number | null
-  findings: string | null
-}
-
-export function usePermits(projectId?: string) {
-  return useQuery({
-    queryKey: opsKeys.permits(projectId),
-    queryFn: async (): Promise<PermitRecord[]> => {
-      if (!supabase) throw new Error(NOT_CONNECTED)
-
-      let query = supabase
-        .from('permits')
-        .select('*, recorder:profiles!permits_recorded_by_fkey(full_name)')
-        .order('created_at', { ascending: true })
-
-      if (projectId) query = query.eq('project_id', projectId)
-
-      const { data, error } = await query
-      if (error) throwReadable(error)
-
-      return (data ?? []).map((row) => ({
-        id: row.id,
-        projectId: row.project_id,
-        permitType: row.permit_type,
-        authority: row.authority,
-        status: row.status,
-        submittedAt: row.submitted_at,
-        decidedAt: row.decided_at,
-        externalReference: row.external_reference,
-        recordedBy: row.recorded_by,
-        recorderName: row.recorder?.full_name ?? null,
-        feeAmount: row.fee_amount ? Number(row.fee_amount) : null,
-        findings: row.findings,
-      }))
-    },
-  })
-}
-
-/**
- * Record an external body's decision on a permit.
- *
- * This is the mutation that lets the whole flow proceed without a real city
- * hall in the loop, which is what makes the system demonstrable end to end. The
- * database refuses an approval or rejection that does not name who recorded it
- * (`permits_decision_needs_recorder`), so the proxy entry is always attributable.
- */
-export function useRecordPermitDecision() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (input: {
-      permitId: string
-      status: 'submitted' | 'under_review' | 'approved' | 'rejected'
-      externalReference?: string
-      findings?: string
-      userId: string
-    }) => {
-      if (!supabase) throw new Error('Not connected to the backend.')
-
-      const decided = input.status === 'approved' || input.status === 'rejected'
-
-      const { error } = await supabase
-        .from('permits')
-        .update({
-          status: input.status,
-          external_reference: input.externalReference ?? null,
-          findings: input.findings ?? null,
-          decided_at: decided ? new Date().toISOString() : null,
-          recorded_by: decided ? input.userId : null,
-          recorded_at: decided ? new Date().toISOString() : null,
-          submitted_at: input.status === 'submitted' ? new Date().toISOString() : undefined,
-        })
-        .eq('id', input.permitId)
-
-      if (error) {
-        if (error.message.includes('permits_decision_needs_recorder')) {
-          throw new Error('A decision must record who entered it. Please sign in again.')
-        }
-        throw readableDbError(error)
-      }
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['ops'] })
-    },
-  })
-}
+/* Permits live in procurement.ts — the permit screen and the project page both
+   read them from there. A second copy of the same two hooks used to sit here,
+   unused, waiting to drift. */
 
 /** True when permitting AND procurement have both finished (flow L1-B gate). */
 export function useDispatchReadiness(projectId?: string) {
@@ -312,29 +213,74 @@ export function useDispatchReadiness(projectId?: string) {
    DISPATCH
    ========================================================================== */
 
+/** A visit as the office sees it: who it is for and how to reach them. */
+export interface OfficeAppointment extends Appointment {
+  /** Ids, alongside the names in `assignedTo`, so a crew member can be removed. */
+  assigneeIds: string[]
+  contactEmail: string | null
+  accountName: string | null
+  projectReference: string | null
+}
+
 export function useAllAppointments() {
   return useQuery({
     queryKey: opsKeys.appointments,
-    queryFn: async (): Promise<Appointment[]> => {
+    queryFn: async (): Promise<OfficeAppointment[]> => {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
+      /* The lead and the customer account are joined so the board can show an
+         email and a name for every visit — a public booking carries them on
+         the lead, a portal request on the account. Before, the board showed
+         only what was typed into the visit itself, and a portal request had no
+         address or number at all. */
       const { data, error } = await supabase
         .from('appointments')
         .select(
-          '*, appointment_assignees(user_id, profiles!appointment_assignees_user_id_fkey(full_name))',
+          '*, appointment_assignees(user_id, profiles!appointment_assignees_user_id_fkey(full_name)), lead:leads!appointments_lead_id_fkey(email), account:profiles!appointments_client_id_fkey(full_name, email), project:projects!appointments_project_id_fkey(reference)',
         )
         .order('scheduled_date', { ascending: true })
+        .order('time_slot', { ascending: true })
 
       if (error) throwReadable(error)
 
-      return (data ?? []).map((row) =>
-        toAppointment(
+      return (data ?? []).map((row) => ({
+        ...toAppointment(
           row,
           (row.appointment_assignees ?? [])
             .map((a) => a.profiles?.full_name)
             .filter((n): n is string => Boolean(n)),
         ),
-      )
+        assigneeIds: (row.appointment_assignees ?? []).map((a) => a.user_id),
+        contactEmail: row.lead?.email ?? row.account?.email ?? null,
+        accountName: row.account?.full_name ?? null,
+        projectReference: row.project?.reference ?? null,
+      }))
+    },
+  })
+}
+
+/** Customer accounts — who a visit or a manual invoice can be for. */
+export function useClientAccounts() {
+  return useQuery({
+    queryKey: ['ops', 'client-accounts'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, phone, address')
+        .eq('role', 'client')
+        .eq('is_active', true)
+        .is('requested_role', null)
+        .order('full_name')
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        fullName: row.full_name,
+        email: row.email,
+        phone: row.phone,
+        address: row.address,
+      }))
     },
   })
 }
@@ -362,31 +308,45 @@ export function useCreateAppointment() {
       type: AppointmentType
       date: string
       timeSlot: string
-      contactName: string
+      contactName?: string
       contactPhone?: string
       address?: string
       notes?: string
       clientId?: string | null
       projectId?: string | null
+      leadId?: string | null
       ticketId?: string | null
     }) => {
       if (!supabase) throw new Error(NOT_CONNECTED)
+
+      /* A visit has to be FOR somebody — a lead, a customer or a project — or
+         the crew has no way to know whose site it is. The database refuses one
+         without (`appointments_needs_a_subject`), which reached the screen as
+         "one of the values is outside what the system allows". Said here,
+         where it can be acted on. */
+      if (!input.clientId && !input.projectId && !input.leadId && !input.ticketId) {
+        throw new Error('Choose who this visit is for — a project, a customer or a lead.')
+      }
+      if (!input.date) throw new Error('Choose a date for the visit.')
 
       const { data, error } = await supabase
         .from('appointments')
         .insert({
           appointment_type: input.type,
-          // 'requested' and not 'confirmed': it is not a commitment until a
-          // crew is on it, and the unassigned queue is what makes that visible.
-          status: 'requested',
+          /* 'confirmed', because the office is booking it: the customer agreed
+             the time on the phone. It stays in the unassigned queue until a
+             crew is on it, which is the step that notifies them. */
+          status: 'confirmed',
           scheduled_date: input.date,
           time_slot: input.timeSlot,
-          contact_name: input.contactName.trim(),
+          // Blank fields are filled from the lead, account or project (0071).
+          contact_name: input.contactName?.trim() ?? '',
           contact_phone: input.contactPhone?.trim() || null,
           address: input.address?.trim() || null,
           notes: input.notes?.trim() || null,
           client_id: input.clientId ?? null,
           project_id: input.projectId ?? null,
+          lead_id: input.leadId ?? null,
           ticket_id: input.ticketId ?? null,
         })
         .select('id')
@@ -448,18 +408,107 @@ export function useAssignCrew() {
         assigned_by: input.assignedBy,
       })
       // 23505 = already assigned. Harmless; carry on to the status update.
-      if (assignError && assignError.code !== '23505') throw assignError
+      if (assignError && assignError.code !== '23505') throwReadable(assignError)
 
+      /* Only a visit that has not started moves to 'dispatched'. Adding a
+         second technician to a job already under way must not knock it back
+         from "in progress". Assigning also puts them on the project's crew
+         (0072), which is what lets them see it in the field portal. */
       const { error: statusError } = await supabase
         .from('appointments')
         .update({ status: 'dispatched' })
         .eq('id', input.appointmentId)
+        .in('status', ['requested', 'confirmed'])
 
-      if (statusError) throw statusError
+      if (statusError) throwReadable(statusError)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ops'] })
       void queryClient.invalidateQueries({ queryKey: ['client'] })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
+    },
+  })
+}
+
+/** Take a crew member off a visit. With nobody left, it goes back to the queue. */
+export function useUnassignCrew() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { appointmentId: string; userId: string; remaining: number }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+
+      const { data, error } = await supabase
+        .from('appointment_assignees')
+        .delete()
+        .eq('appointment_id', input.appointmentId)
+        .eq('user_id', input.userId)
+        .select('user_id')
+      if (error) throwReadable(error)
+      assertWritten(data, 'That crew member could not be removed — your role may not change crews.')
+
+      if (input.remaining <= 0) {
+        const { error: statusError } = await supabase
+          .from('appointments')
+          .update({ status: 'confirmed' })
+          .eq('id', input.appointmentId)
+          .eq('status', 'dispatched')
+        if (statusError) throwReadable(statusError)
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
+    },
+  })
+}
+
+/**
+ * Reschedule, cancel, or close a visit from the office.
+ *
+ * The board could create and assign visits and do nothing else with them: a
+ * customer who rang to move their survey had to be cancelled and re-entered,
+ * and a visit that happened without the app (the technician's phone died) sat
+ * "dispatched" for ever. Moving or cancelling it notifies the customer and the
+ * crew (0073).
+ */
+export function useUpdateAppointment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      date?: string
+      timeSlot?: string
+      status?: 'confirmed' | 'cancelled' | 'completed'
+      cancelledReason?: string
+      notes?: string | null
+    }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+
+      const patch: Database['public']['Tables']['appointments']['Update'] = {}
+      if (input.date) patch.scheduled_date = input.date
+      if (input.timeSlot) patch.time_slot = input.timeSlot
+      if (input.status) patch.status = input.status
+      if (input.status === 'cancelled') {
+        patch.cancelled_reason = input.cancelledReason?.trim() || 'Cancelled by the office'
+      }
+      if (input.notes !== undefined) patch.notes = input.notes?.trim() || null
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .update(patch)
+        .eq('id', input.id)
+        .select('id')
+
+      if (error) throwReadable(error)
+      assertWritten(data, 'That visit was not updated — your role may not change bookings.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
+      void queryClient.invalidateQueries({ queryKey: ['field'] })
     },
   })
 }
@@ -505,6 +554,9 @@ export function useUpdateTicket() {
       assignedTo?: string | null
       priority?: Ticket['priority']
       resolution?: string
+      /** Decided at triage: does the warranty cover this, or is it billable? */
+      warrantyCovered?: boolean | null
+      triagedBy?: string
     }) => {
       if (!supabase) throw new Error('Not connected to the backend.')
 
@@ -518,9 +570,21 @@ export function useUpdateTicket() {
       if (input.assignedTo !== undefined) patch.assigned_to = input.assignedTo
       if (input.priority) patch.priority = input.priority
       if (input.resolution) patch.resolution = input.resolution
+      if (input.warrantyCovered !== undefined) {
+        patch.warranty_covered = input.warrantyCovered
+        if (input.triagedBy) {
+          patch.triaged_by = input.triagedBy
+          patch.triaged_at = new Date().toISOString()
+        }
+      }
 
-      const { error } = await supabase.from('tickets').update(patch).eq('id', input.id)
+      const { data, error } = await supabase
+        .from('tickets')
+        .update(patch)
+        .eq('id', input.id)
+        .select('id')
       if (error) throwReadable(error)
+      assertWritten(data, 'That ticket was not updated — your role may not change it.')
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ops'] })
@@ -543,7 +607,11 @@ export interface WarrantyRequestRow {
   projectReference: string
   transferToName: string | null
   transferToEmail: string | null
+  transferToPhone: string | null
+  expectedTransferDate: string | null
   submittedAt: string
+  reviewedAt: string | null
+  reviewNotes: string | null
 }
 
 export function useWarrantyRequests() {
@@ -571,7 +639,11 @@ export function useWarrantyRequests() {
         projectReference: row.project?.reference ?? '',
         transferToName: row.transfer_to_name,
         transferToEmail: row.transfer_to_email,
+        transferToPhone: row.transfer_to_phone,
+        expectedTransferDate: row.expected_transfer_date,
         submittedAt: row.submitted_at,
+        reviewedAt: row.reviewed_at,
+        reviewNotes: row.review_notes,
       }))
     },
   })
@@ -596,17 +668,24 @@ export function useReviewWarrantyRequest() {
     }) => {
       if (!supabase) throw new Error('Not connected to the backend.')
 
-      const { error } = await supabase
+      if (!input.approve && !input.notes?.trim()) {
+        throw new Error('Say why it is being rejected — the customer reads it.')
+      }
+
+      const { data, error } = await supabase
         .from('warranty_requests')
         .update({
           status: input.approve ? 'approved' : 'rejected',
           reviewed_by: input.reviewerId,
           reviewed_at: new Date().toISOString(),
-          review_notes: input.notes ?? null,
+          review_notes: input.notes?.trim() || null,
         })
         .eq('id', input.id)
+        .eq('status', 'pending')
+        .select('id')
 
       if (error) throwReadable(error)
+      assertWritten(data, 'That request was already decided, or your role may not review it.')
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ops'] })
@@ -738,7 +817,7 @@ export function useProjectBom(projectId?: string) {
         .eq('id', projectId)
         .maybeSingle()
 
-      if (projectError) throw projectError
+      if (projectError) throwReadable(projectError)
       // A project created before its contract, or seeded without one, has no
       // BOM yet. That is a real state, not an error.
       if (!project?.contract_id) return []
@@ -749,7 +828,7 @@ export function useProjectBom(projectId?: string) {
         .eq('id', project.contract_id)
         .maybeSingle()
 
-      if (contractError) throw contractError
+      if (contractError) throwReadable(contractError)
       if (!contract?.quotation_id) return []
 
       const [lines, reservations] = await Promise.all([
@@ -764,7 +843,7 @@ export function useProjectBom(projectId?: string) {
           .eq('project_id', projectId),
       ])
 
-      if (lines.error) throw lines.error
+      if (lines.error) throwReadable(lines.error)
 
       const held = new Map<string, number>()
       for (const row of reservations.data ?? []) {
@@ -779,6 +858,371 @@ export function useProjectBom(projectId?: string) {
         lineTotal: Number(row.line_total),
         quantityHeld: row.stock_item_id ? (held.get(row.stock_item_id) ?? 0) : 0,
       }))
+    },
+  })
+}
+
+/* ============================================================================
+   THE PROJECT TEAM
+   ----------------------------------------------------------------------------
+   A project had an `assigned_engineer` column and a `project_crew` table, and
+   nothing anywhere wrote either. So every project read "Engineer: To be
+   assigned" for its whole life, the customer could only ever message an
+   administrator, and a technician's access to the job depended on a table no
+   screen could fill. Dispatching a technician to a project's visit now adds
+   them to the crew automatically (0072); this is the office's own control over
+   the same two things.
+   ========================================================================== */
+
+export interface CrewMember {
+  userId: string
+  fullName: string
+  role: string
+  crewRole: string
+}
+
+export function useProjectCrew(projectId?: string) {
+  return useQuery({
+    queryKey: ['ops', 'crew', projectId ?? 'none'],
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<CrewMember[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('project_crew')
+        .select('user_id, crew_role, member:profiles!project_crew_user_id_fkey(full_name, role)')
+        .eq('project_id', projectId!)
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        userId: row.user_id,
+        fullName: row.member?.full_name ?? 'Unknown',
+        role: row.member?.role ?? '',
+        crewRole: row.crew_role,
+      }))
+    },
+  })
+}
+
+export function useSetProjectEngineer() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { projectId: string; engineerId: string | null }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('projects')
+        .update({ assigned_engineer: input.engineerId })
+        .eq('id', input.projectId)
+        .select('id')
+      if (error) throwReadable(error)
+      assertWritten(data, 'That was refused — your role may not change the project team.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
+    },
+  })
+}
+
+export function useAddCrewMember() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { projectId: string; userId: string; crewRole: string }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { error } = await supabase.from('project_crew').insert({
+        project_id: input.projectId,
+        user_id: input.userId,
+        crew_role: input.crewRole,
+      })
+      if (error && error.code !== '23505') throwReadable(error)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+    },
+  })
+}
+
+export function useRemoveCrewMember() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { projectId: string; userId: string }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('project_crew')
+        .delete()
+        .eq('project_id', input.projectId)
+        .eq('user_id', input.userId)
+        .select('user_id')
+      if (error) throwReadable(error)
+      assertWritten(
+        data,
+        'That was refused — only a project engineer or an administrator changes crews.',
+      )
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+    },
+  })
+}
+
+/* ============================================================================
+   PREVENTIVE MAINTENANCE
+   ----------------------------------------------------------------------------
+   A schedule row is written when a project is turned over (0008), and
+   nothing read it: the "annual maintenance" in the flow diagram's after-sales
+   branch was a date in a table nobody looked at. The dispatch board now lists
+   what is due, and booking a visit from it links the two — so completing the
+   visit closes the schedule and books the next one (0073).
+   ========================================================================== */
+
+export interface MaintenanceDue {
+  id: string
+  projectId: string
+  projectReference: string
+  clientId: string | null
+  clientName: string
+  address: string
+  dueDate: string
+  appointmentId: string | null
+  notifiedAt: string | null
+}
+
+export function useMaintenanceSchedules() {
+  return useQuery({
+    queryKey: ['ops', 'maintenance'],
+    queryFn: async (): Promise<MaintenanceDue[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('maintenance_schedules')
+        .select(
+          'id, project_id, due_date, appointment_id, notified_at, project:projects!maintenance_schedules_project_id_fkey(reference, address, client_id, client:profiles!projects_client_id_fkey(full_name))',
+        )
+        .eq('status', 'pending')
+        .order('due_date')
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        projectId: row.project_id,
+        projectReference: row.project?.reference ?? '',
+        clientId: row.project?.client_id ?? null,
+        clientName: row.project?.client?.full_name ?? 'Customer',
+        address: row.project?.address ?? '',
+        dueDate: row.due_date,
+        appointmentId: row.appointment_id,
+        notifiedAt: row.notified_at,
+      }))
+    },
+  })
+}
+
+/** Book the visit for a maintenance schedule, and link the two. */
+export function useScheduleMaintenanceVisit() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      scheduleId: string
+      projectId: string
+      date: string
+      timeSlot: string
+    }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+
+      const { data: visit, error } = await supabase
+        .from('appointments')
+        .insert({
+          appointment_type: 'maintenance',
+          status: 'confirmed',
+          scheduled_date: input.date,
+          time_slot: input.timeSlot,
+          contact_name: '',
+          project_id: input.projectId,
+          notes: 'Scheduled preventive maintenance.',
+        })
+        .select('id')
+        .single()
+      if (error) throwReadable(error)
+
+      const { error: linkError } = await supabase
+        .from('maintenance_schedules')
+        .update({ appointment_id: visit.id })
+        .eq('id', input.scheduleId)
+      if (linkError) throwReadable(linkError)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
+    },
+  })
+}
+
+/* ============================================================================
+   WHAT THE CREW LEFT BEHIND: PHOTOS AND SERIALS
+   ========================================================================== */
+
+export interface SitePhoto {
+  id: string
+  storagePath: string
+  category: string | null
+  caption: string | null
+  takenAt: string
+  latitude: number | null
+  longitude: number | null
+  clientVisible: boolean
+}
+
+/** Photos for a project — staff see all; RLS shows a customer the visible ones. */
+export function useProjectPhotos(projectId?: string) {
+  return useQuery({
+    queryKey: ['ops', 'photos', projectId ?? 'none'],
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<SitePhoto[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('site_photos')
+        .select(
+          'id, storage_path, photo_category, caption, taken_at, latitude, longitude, is_client_visible',
+        )
+        .eq('project_id', projectId!)
+        .order('taken_at', { ascending: false })
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        storagePath: row.storage_path,
+        category: row.photo_category,
+        caption: row.caption,
+        takenAt: row.taken_at,
+        latitude: row.latitude !== null ? Number(row.latitude) : null,
+        longitude: row.longitude !== null ? Number(row.longitude) : null,
+        clientVisible: row.is_client_visible,
+      }))
+    },
+  })
+}
+
+export function useProjectAssets(projectId?: string) {
+  return useQuery({
+    queryKey: ['ops', 'assets', projectId ?? 'none'],
+    enabled: Boolean(projectId),
+    queryFn: async () => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('serialised_assets')
+        .select('id, serial_number, product_name, installed_at, warranty_expires_at, status')
+        .eq('project_id', projectId!)
+        .order('created_at')
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        serialNumber: row.serial_number,
+        productName: row.product_name,
+        installedAt: row.installed_at,
+        warrantyExpiresAt: row.warranty_expires_at,
+        status: row.status,
+      }))
+    },
+  })
+}
+
+/** Staff names for a list of ids — milestone sign-offs, recorders, approvers. */
+export function useStaffNames(ids: (string | null | undefined)[]) {
+  const unique = [...new Set(ids.filter((id): id is string => Boolean(id)))].sort()
+  return useQuery({
+    queryKey: ['ops', 'staff-names', unique.join(',')],
+    enabled: unique.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase.rpc('staff_display_names', { p_ids: unique })
+      if (error) throwReadable(error)
+      return (data as Record<string, string> | null) ?? {}
+    },
+  })
+}
+
+/** Show or hide a site photo from the customer. Photos are visible by default. */
+export function useSetPhotoVisibility() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string; visible: boolean }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('site_photos')
+        .update({ is_client_visible: input.visible })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throwReadable(error)
+      assertWritten(data, 'That photo could not be changed.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops', 'photos'] })
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
+    },
+  })
+}
+
+/* ============================================================================
+   ONE PROJECT'S DOCUMENTS
+   ----------------------------------------------------------------------------
+   The project page used the customer portal's "all my documents" query and
+   filtered it in the browser — which, for an office account, downloaded every
+   document of every project to show the handful belonging to one.
+   ========================================================================== */
+
+export interface ProjectDocument {
+  id: string
+  name: string
+  kind: string
+  storagePath: string | null
+  uploadedAt: string
+  clientVisible: boolean
+  uploadedBy: string | null
+}
+
+export function useProjectDocuments(projectId?: string) {
+  return useQuery({
+    queryKey: ['ops', 'documents', 'project', projectId ?? 'none'],
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<ProjectDocument[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id, name, kind, storage_path, uploaded_at, is_client_visible, uploaded_by')
+        .eq('project_id', projectId!)
+        .order('uploaded_at', { ascending: false })
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        kind: row.kind,
+        storagePath: row.storage_path,
+        uploadedAt: row.uploaded_at,
+        clientVisible: row.is_client_visible,
+        uploadedBy: row.uploaded_by,
+      }))
+    },
+  })
+}
+
+export function useSetDocumentVisibility() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string; visible: boolean }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('documents')
+        .update({ is_client_visible: input.visible })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throwReadable(error)
+      assertWritten(data, 'That document could not be changed.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops', 'documents'] })
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
     },
   })
 }

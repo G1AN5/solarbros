@@ -341,3 +341,161 @@ export function useConfirmRefund() {
     },
   })
 }
+
+/* ============================================================================
+   PROOF OF PAYMENT FROM THE CUSTOMER
+   ----------------------------------------------------------------------------
+   With no gateway, a customer pays by transfer and then has to tell somebody.
+   They can now upload the deposit slip or screenshot from their billing page
+   (0072), and it lands here — the accountant matches it to the bank statement
+   and records the payment, rather than waiting for a phone call.
+   ========================================================================== */
+
+export interface PaymentProof {
+  id: string
+  name: string
+  storagePath: string | null
+  uploadedAt: string
+  projectId: string | null
+  projectReference: string
+  clientName: string
+}
+
+export function usePaymentProofs() {
+  return useQuery({
+    queryKey: ['payments', 'proofs'],
+    queryFn: async (): Promise<PaymentProof[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('documents')
+        .select(
+          'id, name, storage_path, uploaded_at, project_id, project:projects(reference, client:profiles!projects_client_id_fkey(full_name))',
+        )
+        .eq('kind', 'receipt')
+        .order('uploaded_at', { ascending: false })
+        .limit(20)
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        storagePath: row.storage_path,
+        uploadedAt: row.uploaded_at,
+        projectId: row.project_id,
+        projectReference: row.project?.reference ?? '',
+        clientName: row.project?.client?.full_name ?? 'Customer',
+      }))
+    },
+  })
+}
+
+/* ============================================================================
+   SALES COMMISSIONS
+   ----------------------------------------------------------------------------
+   Raised automatically when a contract is executed, at the commission rate in
+   Settings, for the rep who owned the lead (0073). Released by finance once
+   the project is complete; rejected automatically if it is cancelled. There
+   was a `commissions` table and nothing that wrote to it or read from it.
+   ========================================================================== */
+
+export interface CommissionRow {
+  id: string
+  repName: string
+  projectId: string
+  projectReference: string
+  projectStatus: string
+  clientName: string
+  amount: number
+  ratePct: number | null
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt: string
+  releasedAt: string | null
+}
+
+export function useCommissions() {
+  return useQuery({
+    queryKey: ['payments', 'commissions'],
+    queryFn: async (): Promise<CommissionRow[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('commissions')
+        .select(
+          'id, project_id, amount, rate_pct, status, created_at, released_at, rep:profiles!commissions_user_id_fkey(full_name), project:projects!commissions_project_id_fkey(reference, status, client:profiles!projects_client_id_fkey(full_name))',
+        )
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        repName: row.rep?.full_name ?? 'Sales',
+        projectId: row.project_id,
+        projectReference: row.project?.reference ?? '',
+        projectStatus: row.project?.status ?? '',
+        clientName: row.project?.client?.full_name ?? 'Customer',
+        amount: Number(row.amount),
+        ratePct: row.rate_pct === null ? null : Number(row.rate_pct),
+        status: row.status,
+        createdAt: row.created_at,
+        releasedAt: row.released_at,
+      }))
+    },
+  })
+}
+
+export function useSetCommissionStatus() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string; status: 'approved' | 'rejected' }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('commissions')
+        .update({ status: input.status })
+        .eq('id', input.id)
+        .eq('status', 'pending')
+        .select('id')
+      if (error) throwReadable(error)
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('That commission was already decided, or your role may not decide it.')
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['payments', 'commissions'] })
+    },
+  })
+}
+
+/**
+ * Bring time-based statuses up to date: invoices past due become overdue,
+ * quotations past their validity expire, maintenance coming due is notified.
+ *
+ * A scheduled job runs this every night (0073). Opening the finance page runs
+ * it too, at most once a session, so the office never works from yesterday's
+ * statuses because a job was missed. The database holds a lock, so two people
+ * opening the page at once is harmless.
+ */
+let refreshedThisSession = false
+
+export async function refreshTimeBasedStatuses(): Promise<boolean> {
+  if (!supabase || refreshedThisSession) return false
+  refreshedThisSession = true
+  const { error } = await supabase.rpc('refresh_time_based_statuses')
+  return !error
+}
+
+/**
+ * Money collected per month — verified payments by the month they arrived,
+ * less refunds — as totals the whole office may see (0075). Null when the
+ * figure cannot be read, so a page can fall back to what it can see itself.
+ */
+export function useMonthlyCollections(months = 8) {
+  return useQuery({
+    queryKey: ['payments', 'monthly', months],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<{ month: string; collected: number }[] | null> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase.rpc('monthly_collections', { p_months: months })
+      if (error) return null
+      return (data ?? []).map((row) => ({ month: row.month, collected: Number(row.collected) }))
+    },
+  })
+}

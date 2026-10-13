@@ -29,6 +29,48 @@ interface DbError {
   hint?: string | null
 }
 
+/**
+ * An error that is worth trying again — the request never reached the
+ * database, so nothing was refused and nothing was saved.
+ *
+ * WHY THIS IS A FLAG AND NOT A WORD IN THE MESSAGE
+ * The field portal's offline queue used to decide "retry or give up" by
+ * looking for words like "fetch" or "network" in the message. In a production
+ * build every unrecognised error is replaced with a generic sentence (see the
+ * end of `readableDbError`), so a technician on a roof with one bar of signal
+ * got a network failure re-worded into something the queue read as permanent:
+ * the write was thrown at them instead of queued, and anything already queued
+ * was discarded on the next sync. The flag survives the re-wording.
+ */
+export class ReadableError extends Error {
+  readonly retryable: boolean
+
+  constructor(message: string, options: { retryable?: boolean } = {}) {
+    super(message)
+    this.name = 'ReadableError'
+    this.retryable = options.retryable ?? false
+  }
+}
+
+/** True when the request failed in transit rather than being refused. */
+export function isNetworkFailure(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false
+  // A real answer from Postgres always carries a SQLSTATE.
+  if (error.code && /^[0-9A-Z]{5}$/.test(error.code)) return false
+  const message = (error.message ?? '').toLowerCase()
+  return (
+    message.includes('failed to fetch') ||
+    message.includes('fetch failed') ||
+    message.includes('networkerror') ||
+    message.includes('network request failed') ||
+    message.includes('load failed') ||
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('err_internet_disconnected') ||
+    message.includes('err_network')
+  )
+}
+
 /* SQLSTATEs carrying a message written FOR the reader.
 
    `22023` and `53400` are raised deliberately by our own functions for
@@ -73,6 +115,25 @@ const BY_CONSTRAINT: Record<string, string> = {
   serialised_assets_serial_number_key:
     'That serial number is already recorded against another installation.',
   booking_blackouts_pkey: 'That date is already closed.',
+
+  appointments_needs_a_subject:
+    'Choose who this visit is for — a lead, a customer or a project — so the crew knows whose site it is.',
+  appointments_completed_needs_signoff:
+    'A completed visit needs the name of the customer who accepted the work.',
+  contracts_one_live_per_lead:
+    'This customer already has a contract in progress. Cancel it first if the terms have changed.',
+  contracts_one_live_per_quotation: 'A contract has already been raised from this quotation.',
+  leads_lost_needs_reason: 'Please record why this opportunity was lost.',
+  stock_reservations_project_id_stock_item_id_key:
+    'That item is already reserved against this project.',
+  commissions_user_id_project_id_key: 'A commission is already recorded for that project.',
+  payment_refunds_reason_check: 'Give a reason of at least ten characters for the refund.',
+  tickets_satisfaction_rating_check: 'Choose between one and five stars.',
+  reviews_rating_check: 'Choose between one and five stars.',
+  time_logs_out_after_in: 'The finishing time has to be after the starting time.',
+  quotations_lead_id_version_key:
+    'Somebody saved another version of this quotation at the same moment. Please save again.',
+  stock_items_sku_key: 'That SKU is already in use by another item.',
 }
 
 /** Pull the constraint name out of whichever field Postgres put it in. */
@@ -83,6 +144,13 @@ function constraintOf(error: DbError): string | undefined {
 }
 
 export function readableDbError(error: DbError): Error {
+  if (isNetworkFailure(error)) {
+    return new ReadableError(
+      'No connection to the server. Check your signal or Wi-Fi — nothing was saved.',
+      { retryable: true },
+    )
+  }
+
   if (error.code && SAFE_TO_SHOW.has(error.code)) {
     return new Error(error.message)
   }
@@ -90,6 +158,17 @@ export function readableDbError(error: DbError): Error {
   const constraint = constraintOf(error)
   if (constraint && BY_CONSTRAINT[constraint]) {
     return new Error(BY_CONSTRAINT[constraint])
+  }
+
+  /* Our own triggers and functions raise these two codes with a sentence
+     written for the reader ("That slot has just been taken", "A recorded
+     payment cannot be altered"). Postgres raising them itself always uses its
+     own fixed phrasing, which names a constraint and is caught above or below. */
+  if (
+    (error.code === '23505' && !error.message.startsWith('duplicate key value')) ||
+    (error.code === '23514' && !error.message.includes('violates check constraint'))
+  ) {
+    return new Error(error.message)
   }
 
   /* The three classes worth naming even when the constraint is unknown, because
@@ -129,4 +208,14 @@ export function readableDbError(error: DbError): Error {
  */
 export function throwReadable(error: DbError | null): asserts error is null {
   if (error) throw readableDbError(error)
+}
+
+/**
+ * A write that RLS filtered out comes back as success with zero rows, not as
+ * an error. Every mutation whose target a policy could hide calls this, so a
+ * change that never happened is never reported as saved.
+ */
+export function assertWritten<T>(rows: T[] | null | undefined, refusal: string): T[] {
+  if (!rows || rows.length === 0) throw new Error(refusal)
+  return rows
 }

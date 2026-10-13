@@ -1,5 +1,6 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 
+import { useAuth } from '@/app/auth/useAuth'
 import { Button, ButtonLink } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { FormError } from '@/components/ui/FormError'
@@ -29,6 +30,9 @@ export function ContactPage() {
 
   const [sent, setSent] = useState(false)
   const submit = useSubmitEnquiry()
+  // A signed-in customer is not asked who they are again.
+  const { user } = useAuth()
+  const formTop = useRef<HTMLDivElement>(null)
 
   /* The bill field takes free text, because people type "8k", "P8,000" and
      "8000 pesos". Strip everything that is not a digit rather than rejecting
@@ -51,7 +55,13 @@ export function ContactPage() {
         monthlyBill: parseBill(String(form.get('bill') ?? '')),
         message: String(form.get('message') ?? ''),
       },
-      { onSuccess: () => setSent(true) },
+      {
+        onSuccess: () => {
+          setSent(true)
+          // The confirmation is shorter than the form it replaces; keep it in view.
+          formTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        },
+      },
     )
   }
 
@@ -68,6 +78,7 @@ export function ContactPage() {
           <div className="grid grid--2" style={{ alignItems: 'start' }}>
             {/* ------------------------------ PERSONALISED QUOTE REQUEST */}
             <Card accent>
+              <div ref={formTop} style={{ scrollMarginTop: 'var(--space-8)' }} />
               <CardHeader title="Request a personalised quotation" />
               <CardBody>
                 {sent ? (
@@ -87,7 +98,14 @@ export function ContactPage() {
                       <label className="field__label" htmlFor="cname">
                         Full name
                       </label>
-                      <input id="cname" name="name" className="input" required />
+                      <input
+                        id="cname"
+                        name="name"
+                        className="input"
+                        required
+                        autoComplete="name"
+                        defaultValue={user?.fullName ?? ''}
+                      />
                     </div>
                     <div
                       className="row"
@@ -97,13 +115,28 @@ export function ContactPage() {
                         <label className="field__label" htmlFor="cemail">
                           Email
                         </label>
-                        <input id="cemail" name="email" className="input" type="email" required />
+                        <input
+                          id="cemail"
+                          name="email"
+                          className="input"
+                          type="email"
+                          required
+                          autoComplete="email"
+                          defaultValue={user?.email ?? ''}
+                        />
                       </div>
                       <div className="field" style={{ flex: 1 }}>
                         <label className="field__label" htmlFor="cphone">
                           Mobile
                         </label>
-                        <input id="cphone" name="phone" className="input" required />
+                        <input
+                          id="cphone"
+                          name="phone"
+                          className="input"
+                          required
+                          autoComplete="tel"
+                          defaultValue={user?.phone ?? ''}
+                        />
                       </div>
                     </div>
                     <div className="field">
@@ -170,18 +203,40 @@ export function ContactPage() {
                       <div className="xs dim strong">HOURS</div>
                       <p>{COMPANY.hours}</p>
                     </div>
-                    <div>
-                      <div className="xs dim strong">PHONE</div>
-                      <p>{COMPANY.phone}</p>
-                    </div>
-                    <div>
-                      <div className="xs dim strong">EMAIL</div>
-                      <p>{COMPANY.email}</p>
-                    </div>
-                    <div>
-                      <div className="xs dim strong">FACEBOOK</div>
-                      <p>{COMPANY.facebook}</p>
-                    </div>
+                    {COMPANY.phone && (
+                      <div>
+                        <div className="xs dim strong">PHONE</div>
+                        <p>
+                          <a href={`tel:${COMPANY.phone.replace(/\s+/g, '')}`}>{COMPANY.phone}</a>
+                        </p>
+                      </div>
+                    )}
+                    {COMPANY.email && (
+                      <div>
+                        <div className="xs dim strong">EMAIL</div>
+                        <p>
+                          <a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a>
+                        </p>
+                      </div>
+                    )}
+                    {COMPANY.facebook && (
+                      <div>
+                        <div className="xs dim strong">FACEBOOK</div>
+                        <p>
+                          <a
+                            href={
+                              COMPANY.facebook.startsWith('http')
+                                ? COMPANY.facebook
+                                : `https://${COMPANY.facebook}`
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Message us on Facebook
+                          </a>
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </CardBody>
               </Card>

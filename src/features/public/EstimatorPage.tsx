@@ -1,5 +1,6 @@
-import { type FormEvent, useMemo, useState } from 'react'
+import { type FormEvent, useMemo, useRef, useState } from 'react'
 
+import { useAuth } from '@/app/auth/useAuth'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { FormError } from '@/components/ui/FormError'
@@ -54,9 +55,19 @@ import { usePricingConfig, useSystemAssumptions } from '@/lib/queries/settings'
    costs zero network requests. This matters because it is often the first page
    a prospect loads on mobile data.
 
-   TODO(backend): on submit, insert a `leads` row with the full appliance
-   profile attached, then invoke the quotation Edge Function to email the PDF
-   estimate. Flow-diagram step L1-A A8 to A9.
+   WHAT HAPPENS ON SUBMIT
+   The appliance profile and the result are saved with a new enquiry, which
+   lands in the sales team's Enquiries inbox with every detail shown here, and
+   an acknowledgement with the summary is queued to the visitor (0073) — sent
+   once an email provider is connected. The formal quotation, with the exact
+   bill of materials, follows the free site survey.
+
+   WHERE THE PAGE SCROLLS
+   Calculating used to reveal the result somewhere below the fold, and sending
+   the form swapped in a short confirmation while the window stayed scrolled to
+   the bottom — so a visitor saw the footer and wondered whether anything had
+   happened. The result is scrolled into view, and the confirmation opens at
+   the top.
    ========================================================================== */
 
 /** Hour presets. Free-typing an exact number is noise the customer does not have. */
@@ -70,6 +81,10 @@ interface CustomAppliance {
 
 export function EstimatorPage() {
   const COMPANY = useCompany()
+  /* A signed-in customer has told us who they are already. */
+  const { user } = useAuth()
+  const resultRef = useRef<HTMLDivElement>(null)
+  const [sentTo, setSentTo] = useState('')
 
   /* --- The customer's answers -------------------------------------------- */
   const [loads, setLoads] = useState<Record<string, ApplianceLoad>>({})
@@ -132,10 +147,11 @@ export function EstimatorPage() {
        kilowatt figure. It is the most useful thing the visitor will ever give
        us: it tells the engineer what the household actually runs and when, so
        the site survey starts from real information instead of a blank sheet. */
+    const email = String(form.get('email') ?? '')
     submit.mutate(
       {
         name: String(form.get('name') ?? ''),
-        email: String(form.get('email') ?? ''),
+        email,
         phone: String(form.get('phone') ?? ''),
         address: String(form.get('address') ?? ''),
         appliances: activeLoads,
@@ -146,7 +162,21 @@ export function EstimatorPage() {
         statedMonthlyBill: monthlyBill ? Number(monthlyBill) : undefined,
         result,
       },
-      { onSuccess: () => setSubmitted(true) },
+      {
+        onSuccess: () => {
+          setSentTo(email)
+          setSubmitted(true)
+          window.scrollTo({ top: 0 })
+        },
+      },
+    )
+  }
+
+  function calculate() {
+    setShowResults(true)
+    // After the result has rendered, bring it into view.
+    requestAnimationFrame(() =>
+      resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     )
   }
 
@@ -206,11 +236,19 @@ export function EstimatorPage() {
       <div className="section">
         <div className="container container--narrow center">
           <div style={{ fontSize: '3rem' }}>📩</div>
-          <h1 style={{ marginBlock: 'var(--space-4)' }}>Your estimate is on its way</h1>
+          <h1 style={{ marginBlock: 'var(--space-4)' }}>Thank you — we have your estimate</h1>
           <p className="muted" style={{ maxWidth: '56ch', marginInline: 'auto' }}>
-            We are preparing a detailed PDF with your appliance breakdown, the recommended system, a
-            full bill of materials and financing options. A sales engineer will follow up within one
-            business day to arrange a free site survey.
+            Your estimate is saved with our sales team. An engineer will contact you at{' '}
+            <strong>{sentTo}</strong> within one business day to arrange a free site survey; your
+            formal quotation, with the exact bill of materials, follows the survey.
+          </p>
+          <p
+            className="small muted"
+            style={{ maxWidth: '56ch', marginInline: 'auto', marginTop: 'var(--space-4)' }}
+          >
+            {user
+              ? 'It is attached to your account — you will see your visits and quotations in your portal.'
+              : 'Create a free account with the same email address and your estimate, visits and quotations appear in your own portal.'}
           </p>
           <p className="xs dim" style={{ marginTop: 'var(--space-8)' }}>
             Your appliance list has been saved with your enquiry, so you will not be asked for it
@@ -727,12 +765,7 @@ export function EstimatorPage() {
                   </div>
                 </div>
 
-                <Button
-                  variant="primary"
-                  size="lg"
-                  disabled={!hasSelection}
-                  onClick={() => setShowResults(true)}
-                >
+                <Button variant="primary" size="lg" disabled={!hasSelection} onClick={calculate}>
                   {showResults ? 'Updated ✓' : 'Calculate my system'}
                 </Button>
               </div>
@@ -795,6 +828,7 @@ export function EstimatorPage() {
             {/* ------------------------------------------ THE RESULT */}
             {showResults && hasSelection && (
               <>
+                <div ref={resultRef} style={{ scrollMarginTop: 'var(--space-6)' }} />
                 <Card accent>
                   <CardBody>
                     <span className="eyebrow">Your recommendation</span>
@@ -926,9 +960,10 @@ export function EstimatorPage() {
                   </div>
                   <p className="small" style={{ marginTop: 'var(--space-2)' }}>
                     Saving {currency(result.monthlySavings)} a month means{' '}
-                    {currency(result.annualSavings)} a year. Over the panels&rsquo; 25-year warranty
-                    that is roughly <strong>{currency(result.lifetimeSavings)}</strong> kept in your
-                    pocket after the system has paid for itself.
+                    {currency(result.annualSavings)} a year. Over the system&rsquo;s{' '}
+                    {hardware.lifetimeYears}-year working life that is roughly{' '}
+                    <strong>{currency(result.lifetimeSavings)}</strong> kept in your pocket after
+                    the system has paid for itself.
                   </p>
                 </div>
 
@@ -989,27 +1024,49 @@ export function EstimatorPage() {
 
                 {/* ------------------------------------ LEAD CAPTURE */}
                 <Card accent>
-                  <CardHeader title="Get the detailed quotation" />
+                  <CardHeader title="Get your quotation" />
                   <CardBody>
                     <p className="small muted" style={{ marginBottom: 'var(--space-4)' }}>
-                      A full PDF with your appliance breakdown, the exact bill of materials, panel
-                      layout and financing options — emailed free, no obligation.
+                      Send us this estimate and a sales engineer arranges a free site survey, then
+                      prepares a formal quotation with the exact bill of materials. No obligation.
                     </p>
                     <form className="stack" onSubmit={handleLeadSubmit}>
-                      <input name="name" className="input" placeholder="Your name" required />
+                      <input
+                        name="name"
+                        className="input"
+                        placeholder="Your name"
+                        aria-label="Your name"
+                        autoComplete="name"
+                        required
+                        defaultValue={user?.fullName ?? ''}
+                      />
                       <input
                         name="email"
                         className="input"
                         type="email"
                         placeholder="you@email.com"
+                        aria-label="Email"
+                        autoComplete="email"
                         required
+                        defaultValue={user?.email ?? ''}
                       />
-                      <input name="phone" className="input" placeholder="Mobile number" required />
+                      <input
+                        name="phone"
+                        className="input"
+                        placeholder="Mobile number"
+                        aria-label="Mobile number"
+                        autoComplete="tel"
+                        required
+                        defaultValue={user?.phone ?? ''}
+                      />
                       <input
                         name="address"
                         className="input"
                         placeholder="Property address"
+                        aria-label="Property address"
+                        autoComplete="street-address"
                         required
+                        defaultValue={user?.address ?? ''}
                       />
 
                       <FormError error={submit.error} />
@@ -1021,7 +1078,7 @@ export function EstimatorPage() {
                         size="lg"
                         disabled={submit.isPending}
                       >
-                        {submit.isPending ? 'Sending…' : 'Email me the full quotation'}
+                        {submit.isPending ? 'Sending…' : 'Send my estimate'}
                       </Button>
                     </form>
                   </CardBody>
@@ -1033,7 +1090,8 @@ export function EstimatorPage() {
                   {hardware.panelWatts} W panels, {result.peakSunHours} peak sun hours and{' '}
                   {Math.round(hardware.performanceRatio * 100)}% system efficiency. Final pricing is
                   confirmed after a free on-site survey, which checks your roof structure, shading
-                  and electrical panel. Prices hold for 5 days. {COMPANY.name} · {COMPANY.hours}
+                  and electrical panel. An estimate is not a quotation: your quotation states the
+                  price and how long it holds. {COMPANY.name} · {COMPANY.hours}
                 </p>
               </>
             )}

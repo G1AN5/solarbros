@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { readableDbError, throwReadable } from '@/lib/db-error'
+import { useAuth } from '@/app/auth/useAuth'
+import { assertWritten, readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { SystemType } from '@/types/domain'
 
@@ -56,22 +57,35 @@ export interface QuotationLineInput {
   unitPrice: number
 }
 
+export type QuotationStatus =
+  'draft' | 'pending_approval' | 'sent' | 'accepted' | 'rejected' | 'expired'
+
 export interface QuotationRow {
   id: string
   reference: string
+  version: number
   leadId: string
   leadName: string
+  leadEmail: string
+  leadAddress: string
   systemKw: number
   systemType: SystemType
+  panelCount: number | null
+  batteryCount: number
   materialCost: number
   labourCost: number
   marginPct: number
   discountPct: number
+  discountApproved: boolean
   totalPrice: number
-  status: 'draft' | 'pending_approval' | 'sent' | 'accepted' | 'rejected' | 'expired'
+  status: QuotationStatus
   validUntil: string | null
+  sentAt: string | null
+  rejectionReason: string | null
   createdAt: string
+  /** The live (not cancelled) contract raised from this quotation, if any. */
   hasContract: boolean
+  preparedBy: string | null
 }
 
 export function useQuotations() {
@@ -83,31 +97,59 @@ export function useQuotations() {
       const { data, error } = await supabase
         .from('quotations')
         .select(
-          'id, reference, lead_id, system_kw, system_type, material_cost, labour_cost, margin_pct, discount_pct, total_price, status, valid_until, created_at, lead:leads(name), contracts(id)',
+          'id, reference, version, lead_id, system_kw, system_type, panel_count, battery_count, material_cost, labour_cost, margin_pct, discount_pct, discount_approved_by, total_price, status, valid_until, sent_at, rejection_reason, created_at, prepared_by, lead:leads(name, email, address, location), contracts(id, status)',
         )
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(100)
 
       if (error) throwReadable(error)
 
       return (data ?? []).map((row) => ({
         id: row.id,
         reference: row.reference,
+        version: row.version,
         leadId: row.lead_id,
         leadName: row.lead?.name ?? 'Unknown',
+        leadEmail: row.lead?.email ?? '',
+        leadAddress: row.lead?.address ?? row.lead?.location ?? '',
         systemKw: Number(row.system_kw),
         systemType: row.system_type,
+        panelCount: row.panel_count,
+        batteryCount: row.battery_count,
         materialCost: Number(row.material_cost),
         labourCost: Number(row.labour_cost),
         marginPct: Number(row.margin_pct),
         discountPct: Number(row.discount_pct),
+        discountApproved: Boolean(row.discount_approved_by),
         totalPrice: Number(row.total_price),
         status: row.status,
         validUntil: row.valid_until,
+        sentAt: row.sent_at,
+        rejectionReason: row.rejection_reason,
         createdAt: row.created_at,
-        // A quotation that already produced a contract must not produce a
-        // second one, or the customer is billed twice for one system.
-        hasContract: (row.contracts?.length ?? 0) > 0,
+        // A quotation that already produced a live contract must not produce
+        // a second one, or the customer is billed twice for one system.
+        hasContract: (row.contracts ?? []).some((c) => c.status !== 'cancelled'),
+        preparedBy: row.prepared_by,
+      }))
+    },
+  })
+}
+
+/** What a quotation contains — descriptions and quantities, never unit costs. */
+export function useQuotationItems(quotationId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['sales', 'quotation-items', quotationId ?? 'none'],
+    enabled: Boolean(quotationId),
+    queryFn: async (): Promise<{ description: string; quantity: number }[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase.rpc('quotation_items_for_client', {
+        p_quotation_id: quotationId!,
+      })
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        description: row.description,
+        quantity: Number(row.quantity),
       }))
     },
   })
@@ -141,7 +183,9 @@ export function useSaveQuotation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (input: SaveQuotationInput): Promise<{ id: string; reference: string }> => {
+    mutationFn: async (
+      input: SaveQuotationInput,
+    ): Promise<{ id: string; reference: string; status: QuotationStatus }> => {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
       const validUntil = new Date(Date.now() + input.validDays * 86_400_000)
@@ -198,10 +242,16 @@ export function useSaveQuotation() {
             discount_pct: input.discountPct,
             total_price: input.totalPrice,
             valid_until: validUntil,
+            /* 'draft' — the database moves it to 'pending_approval' itself
+               when the discount is above the rep's authority (0072). */
             status: 'draft',
           })
-          .select('id, reference')
+          .select('id, reference, status')
           .single()
+      }
+
+      if (input.lines.length === 0) {
+        throw new Error('Add at least one item to the bill of materials.')
       }
 
       let { data: quotation, error } = await insertAt(await nextVersion())
@@ -222,28 +272,85 @@ export function useSaveQuotation() {
       }
       if (!quotation) throw new Error('The quotation could not be saved.')
 
-      if (input.lines.length > 0) {
-        const { error: linesError } = await supabase.from('quotation_lines').insert(
-          input.lines.map((line, index) => ({
-            quotation_id: quotation.id,
-            stock_item_id: line.stockItemId ?? null,
-            description: line.description,
-            quantity: line.quantity,
-            unit_price: line.unitPrice,
-            sort_order: index,
-          })),
-        )
-        // The quotation is the thing that matters; a missing line can be added
-        // by hand. Losing the quotation because one line failed cannot.
-        if (linesError && import.meta.env.DEV) {
-          console.warn('[SolarBros] Quotation lines not saved:', linesError.message)
-        }
+      const { error: linesError } = await supabase.from('quotation_lines').insert(
+        input.lines.map((line, index) => ({
+          quotation_id: quotation.id,
+          stock_item_id: line.stockItemId ?? null,
+          description: line.description,
+          quantity: line.quantity,
+          unit_price: line.unitPrice,
+          sort_order: index,
+        })),
+      )
+
+      /* All of it or none of it. A failed bill of materials used to be logged
+         to the console and the quotation kept anyway — so a quotation could
+         be sent, accepted and executed with no lines behind it, which reserves
+         no stock and leaves the materials gate shut for ever. */
+      if (linesError) {
+        await supabase.from('quotations').delete().eq('id', quotation.id)
+        throwReadable(linesError)
       }
 
       return quotation
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: salesKeys.quotations })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
+      void queryClient.invalidateQueries({ queryKey: ['crm'] })
+    },
+  })
+}
+
+/**
+ * Approve a discount above the rep's authority — administrators only.
+ *
+ * The database records the approver from the session and moves the quotation
+ * back to draft, ready to send (0072). Until this existed the approval the
+ * error message asked for could not be given by anybody.
+ */
+export function useApproveDiscount() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string; userId: string }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('quotations')
+        .update({
+          discount_approved_by: input.userId,
+          discount_approved_at: new Date().toISOString(),
+        })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throwReadable(error)
+      assertWritten(data, 'Only an administrator can approve a discount.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: salesKeys.quotations })
+    },
+  })
+}
+
+/** Throw away a draft that was never sent. Sent ones stay, as the record. */
+export function useDiscardQuotation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('quotations')
+        .delete()
+        .eq('id', input.id)
+        .in('status', ['draft', 'pending_approval'])
+        .select('id')
+      if (error) throwReadable(error)
+      assertWritten(data, 'Only an unsent draft can be discarded.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: salesKeys.quotations })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
     },
   })
 }
@@ -282,20 +389,23 @@ export function useSetQuotationStatus() {
     mutationFn: async (input: { id: string; status: 'accepted' | 'rejected'; reason?: string }) => {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('quotations')
         .update({
           status: input.status,
           responded_at: new Date().toISOString(),
           rejection_reason:
-            input.status === 'rejected' ? (input.reason ?? 'No reason given') : null,
+            input.status === 'rejected' ? input.reason?.trim() || 'No reason given' : null,
         })
         .eq('id', input.id)
+        .select('id')
 
       if (error) throwReadable(error)
+      assertWritten(data, 'That quotation was not updated — your role may not change it.')
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: salesKeys.quotations })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
     },
   })
 }
@@ -586,10 +696,121 @@ export function useCounterSignContract() {
       void queryClient.invalidateQueries({ queryKey: ['fin'] })
       void queryClient.invalidateQueries({ queryKey: ['crm'] })
       void queryClient.invalidateQueries({ queryKey: ['inv'] })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
       /* And the customer most of all: counter-signing is the moment their
          project, their milestones and their first invoice come into
          existence. Their portal was the one place not being refreshed. */
       void queryClient.invalidateQueries({ queryKey: ['client'] })
+    },
+  })
+}
+
+/**
+ * Withdraw a contract nobody has executed yet.
+ *
+ * There was no way to: a contract raised from the wrong version of a
+ * quotation sat "awaiting customer signature" for ever, and the customer was
+ * asked to sign two. Executed contracts are not cancelled here — that is a
+ * project cancellation, with its stock released, on the project page.
+ */
+export function useCancelContract() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('contracts')
+        .update({ status: 'cancelled' })
+        .eq('id', input.id)
+        .in('status', ['draft', 'awaiting_client', 'awaiting_company'])
+        .select('id')
+      if (error) throwReadable(error)
+      assertWritten(data, 'Only a contract that has not been executed can be withdrawn.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['sales'] })
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
+    },
+  })
+}
+
+/* ============================================================================
+   THE CUSTOMER'S SIDE
+   ----------------------------------------------------------------------------
+   A customer could not see what they had been quoted, or say yes to it — the
+   rep pressed "Customer accepted" on their behalf after a phone call. Both
+   routes now work: the customer can accept or decline from their portal, and
+   the sales team is told either way (0073/0074).
+   ========================================================================== */
+
+export interface MyQuotation {
+  id: string
+  reference: string
+  systemKw: number
+  systemType: SystemType
+  panelCount: number | null
+  batteryCount: number
+  totalPrice: number
+  discountPct: number
+  status: QuotationStatus
+  validUntil: string | null
+  sentAt: string | null
+  rejectionReason: string | null
+}
+
+export function useMyQuotations() {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['client', 'quotations', user?.id ?? 'none'],
+    enabled: Boolean(user),
+    queryFn: async (): Promise<MyQuotation[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      // RLS shows a customer only the sent, answered or expired quotations
+      // on leads attached to their own account.
+      const { data, error } = await supabase
+        .from('quotations')
+        .select(
+          'id, reference, system_kw, system_type, panel_count, battery_count, total_price, discount_pct, status, valid_until, sent_at, rejection_reason',
+        )
+        .order('created_at', { ascending: false })
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        reference: row.reference,
+        systemKw: Number(row.system_kw),
+        systemType: row.system_type,
+        panelCount: row.panel_count,
+        batteryCount: row.battery_count,
+        totalPrice: Number(row.total_price),
+        discountPct: Number(row.discount_pct),
+        status: row.status,
+        validUntil: row.valid_until,
+        sentAt: row.sent_at,
+        rejectionReason: row.rejection_reason,
+      }))
+    },
+  })
+}
+
+export function useRespondToQuotation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string; accept: boolean; reason?: string }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { error } = await supabase.rpc('respond_to_quotation', {
+        p_quotation_id: input.id,
+        p_accept: input.accept,
+        p_reason: input.reason?.trim() || undefined,
+      })
+      if (error) throwReadable(error)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
+      void queryClient.invalidateQueries({ queryKey: ['sales'] })
     },
   })
 }

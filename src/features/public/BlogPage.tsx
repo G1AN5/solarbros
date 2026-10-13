@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import { Card, CardBody } from '@/components/ui/Card'
+import { MediaCover } from '@/components/ui/MediaCover'
 import { QueryState } from '@/components/ui/QueryState'
 import { useBlogPosts } from '@/lib/queries/content'
 import { date } from '@/lib/format'
@@ -69,9 +70,11 @@ export function BlogPage() {
           {/* Featured post gets the full width — the newest piece leads. */}
           <Link to={`/blog/${featured.slug}`}>
             <Card interactive>
-              <div className="portfolio-item__media" style={{ height: 220 }}>
-                Cover image
-              </div>
+              <MediaCover
+                path={featured.coverPath}
+                alt={featured.title}
+                style={{ aspectRatio: 'auto', height: 220 }}
+              />
               <CardBody>
                 <div className="row">
                   <span className="badge badge--brand">{featured.category}</span>

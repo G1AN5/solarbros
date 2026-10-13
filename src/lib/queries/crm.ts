@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { readableDbError, throwReadable } from '@/lib/db-error'
+import { assertWritten, readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { Lead, LeadStage, Package } from '@/types/domain'
 
@@ -47,6 +47,9 @@ export function useLeads() {
         score: row.score,
         source: row.source,
         assignedTo: row.assigned?.full_name ?? 'Unassigned',
+        assignedToId: row.assigned_to ?? undefined,
+        address: row.address ?? '',
+        convertedClientId: row.converted_client_id ?? undefined,
         createdAt: row.created_at,
       }))
     },
@@ -67,13 +70,18 @@ export function useUpdateLeadStage() {
     mutationFn: async (input: { id: string; stage: LeadStage; lostReason?: string }) => {
       if (!supabase) throw new Error('Not connected to the backend.')
 
-      const { error } = await supabase
+      if (input.stage === 'lost' && !input.lostReason?.trim()) {
+        throw new Error('Please record why this opportunity was lost.')
+      }
+
+      const { data, error } = await supabase
         .from('leads')
         .update({
           stage: input.stage,
-          lost_reason: input.stage === 'lost' ? (input.lostReason ?? 'No reason given') : null,
+          lost_reason: input.stage === 'lost' ? input.lostReason!.trim() : null,
         })
         .eq('id', input.id)
+        .select('id')
 
       if (error) {
         if (error.message.includes('leads_lost_needs_reason')) {
@@ -81,9 +89,71 @@ export function useUpdateLeadStage() {
         }
         throw readableDbError(error)
       }
+      assertWritten(data, 'That change was refused. Your role may not move leads.')
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: crmKeys.leads })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
+    },
+  })
+}
+
+/**
+ * Give a lead an owner.
+ *
+ * Kept apart from editing the lead's details on purpose, so ownership never
+ * changes as a side effect of fixing a phone number. Leads gain an owner on
+ * their own too — whoever first contacts them or prepares their quotation
+ * (0071) — this is for handing one over.
+ */
+export function useAssignLead() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string; ownerId: string | null }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('leads')
+        .update({ assigned_to: input.ownerId })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throwReadable(error)
+      assertWritten(data, 'That change was refused. Your role may not reassign leads.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: crmKeys.leads })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
+    },
+  })
+}
+
+/**
+ * Remove a lead entirely — administrators only, by policy.
+ *
+ * Refused by the database while anything depends on it (a quotation, a
+ * contract); the honest way to retire a lead that went somewhere is to mark it
+ * lost, which keeps the reason.
+ */
+export function useDeleteLead() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase.from('leads').delete().eq('id', input.id).select('id')
+      if (error) {
+        if (error.code === '23503') {
+          throw new Error(
+            'This lead has quotations or a contract against it, so it cannot be deleted. Mark it lost instead.',
+          )
+        }
+        throw readableDbError(error)
+      }
+      assertWritten(data, 'Only an administrator can delete a lead.')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: crmKeys.leads })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
     },
   })
 }
@@ -97,24 +167,30 @@ export function useCreateLead() {
       email: string
       phone?: string
       location?: string
+      address?: string
       monthlyBill?: number
       estimatedKw?: number
+      notes?: string
       source?: Lead['source']
     }) => {
       if (!supabase) throw new Error('Not connected to the backend.')
+      if (!input.name.trim()) throw new Error('A lead needs a name.')
       const { error } = await supabase.from('leads').insert({
-        name: input.name,
-        email: input.email,
-        phone: input.phone ?? null,
-        location: input.location ?? null,
+        name: input.name.trim(),
+        email: input.email.trim().toLowerCase(),
+        phone: input.phone?.trim() || null,
+        location: input.location?.trim() || null,
+        address: input.address?.trim() || null,
         monthly_bill: input.monthlyBill ?? null,
         estimated_kw: input.estimatedKw ?? null,
+        qualification_notes: input.notes?.trim() || null,
         source: input.source ?? 'walk_in',
       })
       if (error) throwReadable(error)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: crmKeys.leads })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
     },
   })
 }
@@ -174,6 +250,7 @@ export function useUpdateLead() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: crmKeys.leads })
+      void queryClient.invalidateQueries({ queryKey: ['enquiries'] })
     },
   })
 }

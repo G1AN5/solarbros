@@ -16,6 +16,8 @@ import {
   type PermitStatus,
   type PermitType,
   useCreatePermit,
+  useCreatePermitSet,
+  useDeletePermit,
   usePermits,
   useRecordPermitDecision,
 } from '@/lib/queries/procurement'
@@ -73,14 +75,26 @@ export function PermitsPage() {
   const { user } = useAuth()
   const permitsQuery = usePermits()
   const projectsQuery = useProjects()
-  const permits = permitsQuery.data ?? []
-  const projects = projectsQuery.data ?? []
+  const allPermits = permitsQuery.data ?? []
+  // Permits are for jobs still to be built; a finished or cancelled one needs none.
+  const projects = (projectsQuery.data ?? []).filter(
+    (p) => p.status !== 'cancelled' && p.status !== 'completed',
+  )
 
   const createPermit = useCreatePermit()
+  const createSet = useCreatePermitSet()
+  const deletePermit = useDeletePermit()
   const recordDecision = useRecordPermitDecision()
 
   const [adding, setAdding] = useState(false)
+  const [addingSet, setAddingSet] = useState(false)
+  const [setResult, setSetResult] = useState<string | null>(null)
   const [deciding, setDeciding] = useState<Permit | null>(null)
+  const [projectFilter, setProjectFilter] = useState('')
+
+  const permits = projectFilter
+    ? allPermits.filter((p) => p.projectId === projectFilter)
+    : allPermits
 
   const approved = permits.filter((p) => p.status === 'approved')
   const blocked = permits.filter((p) => p.status === 'rejected')
@@ -98,6 +112,29 @@ export function PermitsPage() {
         feeAmount: form.get('fee') ? Number(form.get('fee')) : undefined,
       },
       { onSuccess: () => setAdding(false) },
+    )
+  }
+
+  function handleAddSet(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    createSet.mutate(
+      {
+        projectId: String(form.get('project')),
+        municipality: String(form.get('municipality') ?? ''),
+        utility: String(form.get('utility') ?? ''),
+        netMetering: form.get('netMetering') === 'on',
+      },
+      {
+        onSuccess: (added) => {
+          setAddingSet(false)
+          setSetResult(
+            added === 0
+              ? 'That project already tracks every standard application.'
+              : `${added} application${added === 1 ? '' : 's'} added — record each one as it is filed.`,
+          )
+        },
+      },
     )
   }
 
@@ -125,9 +162,14 @@ export function PermitsPage() {
         description="The external-approval track. Decisions are recorded on behalf of the issuing body, and marked as such."
         breadcrumbs={[{ label: 'Operations' }, { label: 'Permits' }]}
         actions={
-          <Button variant="primary" onClick={() => setAdding(true)}>
-            + Track a permit
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => setAdding(true)}>
+              + One permit
+            </Button>
+            <Button variant="primary" onClick={() => setAddingSet(true)}>
+              + Standard set for a project
+            </Button>
+          </>
         }
       />
 
@@ -165,8 +207,41 @@ export function PermitsPage() {
       </Card>
 
       <Card>
-        <CardHeader title="All permits" />
+        <CardHeader
+          title="All permits"
+          action={
+            <select
+              className="select"
+              style={{ width: 'auto', fontSize: 'var(--text-xs)' }}
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              aria-label="Show permits for"
+            >
+              <option value="">Every project</option>
+              {(projectsQuery.data ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.reference} — {p.clientName}
+                </option>
+              ))}
+            </select>
+          }
+        />
         <CardBody>
+          {setResult && (
+            <p
+              className="small"
+              style={{
+                marginBottom: 'var(--space-4)',
+                padding: 'var(--space-3)',
+                background: 'var(--success-bg)',
+                color: 'var(--success-fg)',
+                borderRadius: 'var(--radius)',
+              }}
+            >
+              {setResult}
+            </p>
+          )}
+          <FormError error={deletePermit.error} />
           <QueryState
             isLoading={permitsQuery.isLoading}
             error={permitsQuery.error as Error | null}
@@ -222,11 +297,31 @@ export function PermitsPage() {
                         )}
                       </td>
                       <td>
-                        <Button variant="outline" size="sm" onClick={() => setDeciding(permit)}>
-                          {permit.status === 'approved' || permit.status === 'rejected'
-                            ? 'Amend'
-                            : 'Record outcome'}
-                        </Button>
+                        <div className="row" style={{ gap: 4 }}>
+                          <Button variant="outline" size="sm" onClick={() => setDeciding(permit)}>
+                            {permit.status === 'approved' || permit.status === 'rejected'
+                              ? 'Amend'
+                              : 'Record outcome'}
+                          </Button>
+                          {permit.status === 'preparing' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={deletePermit.isPending}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Remove the ${PERMIT_TYPE_LABEL[permit.permitType]} for ${permit.projectReference}?`,
+                                  )
+                                ) {
+                                  deletePermit.mutate({ id: permit.id })
+                                }
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -297,6 +392,68 @@ export function PermitsPage() {
 
           <Button type="submit" variant="primary" block disabled={createPermit.isPending}>
             {createPermit.isPending ? 'Adding…' : 'Track this permit'}
+          </Button>
+        </form>
+      </Modal>
+
+      {/* ---------------------------------------- THE STANDARD SET */}
+      <Modal
+        open={addingSet}
+        onClose={() => setAddingSet(false)}
+        title="Standard permits for a project"
+      >
+        <form className="stack" onSubmit={handleAddSet}>
+          <p className="small muted">
+            Adds the building and electrical permits, the utility interconnection, net metering and
+            permission to operate — each as &ldquo;preparing&rdquo;. Any the project already tracks
+            are skipped.
+          </p>
+          <div className="field">
+            <label className="field__label" htmlFor="set-project">
+              Project
+            </label>
+            <select id="set-project" name="project" className="select" required defaultValue="">
+              <option value="" disabled>
+                Select a project…
+              </option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.reference} — {p.clientName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="set-municipality">
+              City or municipality
+            </label>
+            <input
+              id="set-municipality"
+              name="municipality"
+              className="input"
+              required
+              placeholder="e.g. Paranaque City Hall"
+            />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="set-utility">
+              Distribution utility
+            </label>
+            <input
+              id="set-utility"
+              name="utility"
+              className="input"
+              required
+              defaultValue="Meralco"
+            />
+          </div>
+          <label className="row small" style={{ gap: 'var(--space-2)' }}>
+            <input type="checkbox" name="netMetering" defaultChecked />
+            The customer will export to the grid (net metering)
+          </label>
+          <FormError error={createSet.error} />
+          <Button type="submit" variant="primary" block disabled={createSet.isPending}>
+            {createSet.isPending ? 'Adding…' : 'Add the applications'}
           </Button>
         </form>
       </Modal>

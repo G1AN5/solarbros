@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '@/app/auth/useAuth'
 import { Avatar } from '@/components/ui/Avatar'
+import { NotificationBell } from './NotificationBell'
 import { useOfflineQueue } from '@/lib/queries/field'
 import { FIELD_NAV } from '@/app/navigation'
 import { useCompany } from '@/lib/queries/public-site'
@@ -16,9 +17,9 @@ import { usePageTitle } from '@/lib/usePageTitle'
      • Constrained to 520px even on desktop, so you can review the real mobile
        experience without opening dev-tools device emulation.
 
-   The offline banner is a UI stub for the spec's requirement that technicians
-   in low-signal areas keep working and sync later. The real implementation
-   needs a service worker plus an IndexedDB write queue.
+   The offline banner reads the real write queue (src/lib/offline-queue.ts):
+   it appears whenever the phone is offline or has work waiting to sync, so a
+   technician knows before driving away whether the office has seen it.
    ========================================================================== */
 
 export function FieldLayout() {
@@ -28,8 +29,6 @@ export function FieldLayout() {
 
   const { pending, isOnline } = useOfflineQueue()
   const { user } = useAuth()
-
-  // Placeholder — replace with `useSyncStatus()` backed by the offline queue.
 
   return (
     <div className="shell--field">
@@ -41,11 +40,16 @@ export function FieldLayout() {
             </div>
             <div style={{ fontWeight: 700 }}>{user?.fullName}</div>
           </div>
-          <Avatar
-            initials={user?.avatarInitials ?? '??'}
-            url={user?.avatarUrl}
-            name={user?.fullName}
-          />
+          <div className="row" style={{ gap: 'var(--space-2)' }}>
+            {/* New jobs and reschedules arrive here — a technician should not
+                have to reload Today to learn the afternoon has changed. */}
+            <NotificationBell inverse />
+            <Avatar
+              initials={user?.avatarInitials ?? '??'}
+              url={user?.avatarUrl}
+              name={user?.fullName}
+            />
+          </div>
         </div>
 
         {(pending > 0 || !isOnline) && (

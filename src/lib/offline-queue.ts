@@ -43,6 +43,8 @@ export type QueuedActionType =
   | 'material_usage'
   | 'checklist_item'
   | 'time_log'
+  /* Arriving on site: the visit moves to in progress and the clock starts. */
+  | 'job_start'
   /* Closing a job. Queued like everything else, because the moment a technician
      is most likely to have no signal is standing in a customer's garden at the
      end of the visit. */
@@ -132,6 +134,63 @@ export function clearQueue() {
   writeQueue([])
 }
 
+/* --- What could not be synced --------------------------------------------- */
+
+/* An action the server refused (a stage done out of order, a duplicate
+   serial) is dropped from the queue so it cannot block everything behind it.
+   It used to be dropped into the browser console, where no technician will
+   ever look — so it was lost silently, which the header of this file says is
+   the one thing this queue must never do. They are now kept, with the reason,
+   for the Account screen to show until the technician has read them. */
+
+const FAILED_KEY = 'solarbros.offline-failed'
+
+export interface FailedAction {
+  id: string
+  label: string
+  reason: string
+  failedAt: string
+}
+
+let cachedFailedRaw: string | null = null
+let cachedFailed: FailedAction[] = []
+
+export function getFailedActions(): FailedAction[] {
+  try {
+    const raw = localStorage.getItem(FAILED_KEY) ?? '[]'
+    if (raw !== cachedFailedRaw) {
+      cachedFailedRaw = raw
+      cachedFailed = JSON.parse(raw) as FailedAction[]
+    }
+    return cachedFailed
+  } catch {
+    return cachedFailed
+  }
+}
+
+function recordFailure(action: QueuedAction, error: unknown) {
+  const reason = error instanceof Error ? error.message : String(error)
+  const next = [
+    { id: action.id, label: action.label, reason, failedAt: new Date().toISOString() },
+    ...getFailedActions(),
+  ].slice(0, 20)
+  try {
+    localStorage.setItem(FAILED_KEY, JSON.stringify(next))
+  } catch {
+    // Nothing more can be done; the console line below still records it.
+  }
+  notify()
+}
+
+export function dismissFailedActions() {
+  try {
+    localStorage.removeItem(FAILED_KEY)
+  } catch {
+    // Locked-down storage: there is nothing to dismiss anyway.
+  }
+  notify()
+}
+
 /* --- Subscriptions -------------------------------------------------------- */
 
 type Listener = () => void
@@ -163,13 +222,22 @@ export type ActionHandlers = Record<
  * denial will fail identically every time, and retrying it forever would keep a
  * poisoned action at the head of the queue, blocking everything behind it.
  */
-function isRetryable(error: unknown): boolean {
+export function isRetryable(error: unknown): boolean {
+  /* The error layer marks a request that never arrived (db-error.ts). Read
+     that first: in a production build the message itself has been rewritten
+     for the person reading it, and no longer says "fetch" or "network". */
+  if (error && typeof error === 'object' && 'retryable' in error) {
+    return Boolean((error as { retryable?: unknown }).retryable)
+  }
+
+  // A raw browser error that never went through the error layer.
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   return (
-    message.includes('fetch') ||
-    message.includes('network') ||
-    message.includes('timeout') ||
-    message.includes('failed to')
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('network request failed') ||
+    message.includes('load failed') ||
+    message.includes('timeout')
   )
 }
 
@@ -208,6 +276,7 @@ export async function flushQueue(handlers: ActionHandlers): Promise<FlushResult>
           `[SolarBros] Discarding unsyncable action "${action.label}" after ${action.attempts + 1} attempts:`,
           error,
         )
+        recordFailure(action, error)
         removeFromQueue(action.id)
         failed++
       } else {

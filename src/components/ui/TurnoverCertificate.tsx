@@ -32,6 +32,8 @@ export interface TurnoverData {
   warrantyPanelYears: number
   warrantyInverterYears: number
   warrantyWorkmanshipYears: number
+  /** Only for a system with storage; an on-grid system has no battery to cover. */
+  warrantyBatteryYears?: number
   company: {
     name: string
     address: string
@@ -71,7 +73,7 @@ export function TurnoverCertificate({ open, onClose, data }: TurnoverCertificate
             <div className="receipt__company">{data.company.name}</div>
             <div className="receipt__meta">{data.company.address}</div>
             <div className="receipt__meta">
-              {data.company.phone} · {data.company.email}
+              {[data.company.phone, data.company.email].filter(Boolean).join(' · ')}
             </div>
           </div>
           <div className="receipt__stamp">
@@ -119,6 +121,12 @@ export function TurnoverCertificate({ open, onClose, data }: TurnoverCertificate
               <td>Inverter warranty</td>
               <td className="receipt__amount">{data.warrantyInverterYears} years</td>
             </tr>
+            {data.warrantyBatteryYears !== undefined && (
+              <tr>
+                <td>Battery warranty</td>
+                <td className="receipt__amount">{data.warrantyBatteryYears} years</td>
+              </tr>
+            )}
             <tr>
               <td>Workmanship warranty</td>
               <td className="receipt__amount">{data.warrantyWorkmanshipYears} years</td>

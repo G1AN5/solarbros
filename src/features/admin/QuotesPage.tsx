@@ -1,221 +1,207 @@
 import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { FormError } from '@/components/ui/FormError'
+import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { QuotationDocument, type QuotationDocumentData } from '@/components/ui/QuotationDocument'
 import { StatTile } from '@/components/ui/StatTile'
 import { useAuth } from '@/app/auth/useAuth'
+import { suggestBom } from '@/lib/bom'
 import { currency, currencyCompact, date, humanize } from '@/lib/format'
 import {
   CONTRACT_STATUS_LABEL,
   CONTRACT_STATUS_TONE,
   QUOTATION_STATUS_TONE,
+  STOCK_CATEGORY_LABEL,
   SYSTEM_TYPE_LABEL,
 } from '@/lib/labels'
 import { useLeads, usePackages } from '@/lib/queries/crm'
+import { useEnquiry } from '@/lib/queries/enquiries'
 import { useStock } from '@/lib/queries/inventory-finance'
+import { useCompany } from '@/lib/queries/public-site'
 import {
-  useCounterSignContract,
+  useApproveDiscount,
+  useCancelContract,
   useContracts,
+  useCounterSignContract,
   useCreateContract,
+  useDiscardQuotation,
+  useQuotationItems,
   useQuotations,
   useSaveQuotation,
   useSendQuotation,
   useSetQuotationStatus,
+  type QuotationRow,
 } from '@/lib/queries/sales'
-import { settingNum, useSettings } from '@/lib/queries/settings'
+import { settingNum, useSettings, useSystemAssumptions } from '@/lib/queries/settings'
 import { QueryState } from '@/components/ui/QueryState'
-import type { Package, StockItem } from '@/types/domain'
+import type { SystemType } from '@/types/domain'
 
 /* ============================================================================
-   QuotesPage — Quotations & automated Bill of Materials.
+   QuotesPage — Quotations & the bill of materials.
    ----------------------------------------------------------------------------
-   Implements the spec's "Automated Bill of Materials (BOM) & Real-Time Stock
-   Reservation". The chain it sits in:
+   The chain it sits in:
 
-     lead (CRM)  →  pick a package  →  BOM generated  →  quotation PDF
-                                             │
-                                    contract signed
-                                             │
-                        ┌────────────────────┴────────────────────┐
-                        ▼                                         ▼
-              stock reserved (Inventory)            project created (Projects)
+     lead (Enquiries / CRM)  →  size the system  →  bill of materials  →
+     quotation  →  sent  →  accepted (by the customer, or recorded for them)
+                                     │
+                              contract raised  →  customer signs  →
+                              counter-signed   →  project, stock, invoice
 
-   The BOM is derived, not typed by hand. That is the point: a quote and the
-   materials it commits can never drift apart, and margin is visible before the
-   quote is sent rather than discovered afterwards.
+   THE BILL OF MATERIALS IS A DRAFT YOU EDIT
+   It used to be generated from a fixed recipe and could not be changed — and
+   the recipe named SKUs the catalogue did not have, so hybrid quotations went
+   out with no inverter and no batteries on them. It is now suggested from the
+   catalogue (src/lib/bom.ts), with the reason for each quantity shown beside
+   it, and every line can be changed, removed or added to. An engineer looking
+   at a real roof knows things a rule does not.
    ========================================================================== */
 
-/** Quantities per kW for each system type — the recipe behind the BOM. */
-/*
- * Keyed on SKU rather than database id. Ids differ between environments; a SKU
- * is the same string in development, staging and production, so the recipe
- * survives a restore into a fresh project.
- */
-const RECIPE: Record<string, { sku: string; perKw: number }[]> = {
-  on_grid: [
-    { sku: 'PNL-CS-620', perKw: 1.7 },
-    { sku: 'RCK-RAIL-42', perKw: 3 },
-    { sku: 'ACC-MC4-PR', perKw: 4 },
-  ],
-  hybrid: [
-    { sku: 'PNL-CS-620', perKw: 1.7 },
-    { sku: 'INV-DEYE-6K', perKw: 0.17 },
-    { sku: 'BAT-PYL-5K', perKw: 0.35 },
-    { sku: 'RCK-RAIL-42', perKw: 3 },
-    { sku: 'ACC-MC4-PR', perKw: 4 },
-  ],
-  off_grid: [
-    { sku: 'PNL-CS-620', perKw: 1.7 },
-    { sku: 'INV-DEYE-6K', perKw: 0.17 },
-    { sku: 'BAT-PYL-5K', perKw: 0.6 },
-    { sku: 'CTL-MPPT-60', perKw: 0.15 },
-    { sku: 'RCK-RAIL-42', perKw: 3 },
-  ],
-}
-
-function buildBom(pkg: Package, stock: StockItem[]) {
-  return (
-    (RECIPE[pkg.systemType] ?? [])
-      .map((line) => {
-        const item = stock.find((s) => s.sku === line.sku)
-        if (!item) return null
-        const quantity = Math.ceil(line.perKw * pkg.sizeKw)
-        return {
-          item,
-          quantity,
-          lineTotal: quantity * item.unitCost,
-          available: item.onHand - item.reserved,
-        }
-      })
-      // A recipe line whose SKU is not in the catalogue is skipped rather than
-      // crashing the page — the catalogue is edited independently of the recipe.
-      .filter((line): line is NonNullable<typeof line> => line !== null)
-  )
+interface DraftLine {
+  stockItemId: string
+  quantity: number
+  rule?: string
 }
 
 export function QuotesPage() {
+  const { user } = useAuth()
+  const [searchParams] = useSearchParams()
+  const company = useCompany()
+
   const packagesQuery = usePackages()
   const leadsQuery = useLeads()
   const stockQuery = useStock()
+  const quotationsQuery = useQuotations()
+  const contractsQuery = useContracts()
 
   const PACKAGES = packagesQuery.data ?? []
-  const LEADS = leadsQuery.data ?? []
   const STOCK = stockQuery.data ?? []
+  // Only leads still in play. A lost lead is not quoted; an installed one has
+  // its system already.
+  const LEADS = (leadsQuery.data ?? []).filter((l) => l.stage !== 'lost' && l.stage !== 'installed')
+  const quotations = quotationsQuery.data ?? []
+  const contracts = contractsQuery.data ?? []
 
-  // Default to the featured package and the first lead once they arrive.
-  const [packageId, setPackageId] = useState<string>('')
-  const [leadId, setLeadId] = useState<string>('')
-  const [discount, setDiscount] = useState(0)
-
-  const { user } = useAuth()
   const settings = useSettings().data
+  const hardware = useSystemAssumptions()
   const labourPct = settingNum(settings, 'pricing.labour_overhead_pct', 18)
-
-  /* The help text under this slider says the starting margin comes from
-     Settings. It did not — it was `useState(35)`, a literal, and the setting
-     beside it was read by nothing. Somebody moving the company's target margin
-     would have changed a number on a screen and nothing else.
-
-     `undefined` until the settings arrive, so the slider adopts the configured
-     figure on first load instead of snapping from 35 to it; once the rep moves
-     it, their choice stands for the rest of the quote. */
   const defaultMargin = settingNum(settings, 'pricing.default_margin_pct', 35)
-  const [marginOverride, setMarginOverride] = useState<number | null>(null)
-  const margin = marginOverride ?? defaultMargin
-  const setMargin = setMarginOverride
   const discountAuthority = settingNum(settings, 'sales.discount_authority_pct', 10)
-  /* A company that does not negotiate should not see a discount control at
-     all — one sitting under a published price list invites every rep to use it.
-     The database refuses a discount when this is off, so hiding the slider is
-     a courtesy rather than the control. */
   const discountSetting = settings?.find((s) => s.key === 'sales.discount_enabled')
   const discountAllowed = discountSetting ? discountSetting.value !== false : true
   const quoteValidDays = settingNum(settings, 'sales.quotation_validity_days', 30)
-
-  const quotationsQuery = useQuotations()
-  const quotations = quotationsQuery.data ?? []
-  const contractsQuery = useContracts()
-  const contracts = contractsQuery.data ?? []
-
-  const saveQuotation = useSaveQuotation()
-  const sendQuotation = useSendQuotation()
-  const setQuotationStatus = useSetQuotationStatus()
-  const createContract = useCreateContract()
-  const counterSign = useCounterSignContract()
-
-  const [savedRef, setSavedRef] = useState<string | null>(null)
-
-  const pkg =
-    PACKAGES.find((p) => p.id === packageId) ?? PACKAGES.find((p) => p.featured) ?? PACKAGES[0]
-  const lead = LEADS.find((l) => l.id === leadId) ?? LEADS[0]
-
-  // Nothing can be quoted before the catalogue loads.
-  if (packagesQuery.isLoading || stockQuery.isLoading) {
-    return (
-      <>
-        <PageHeader title="Quotations &amp; BOM" />
-        <QueryState isLoading error={null}>
-          {null}
-        </QueryState>
-      </>
-    )
+  const batteriesIncluded = settingNum(settings, 'pricing.batteries_included', 3)
+  const split = {
+    downPayment: settingNum(settings, 'finance.down_payment_pct', 50),
+    delivery: settingNum(settings, 'finance.delivery_pct', 35),
+    commissioning: settingNum(settings, 'finance.commissioning_pct', 15),
   }
 
-  if (!pkg || !lead) {
-    return (
-      <>
-        <PageHeader title="Quotations &amp; BOM" />
-        <QueryState
-          isLoading={false}
-          error={null}
-          isEmpty
-          emptyIcon="&#128203;"
-          emptyTitle="Nothing to quote yet"
-          emptyMessage="A quotation needs at least one lead and one package."
-        >
-          {null}
-        </QueryState>
-      </>
-    )
+  /* --- What is being quoted ------------------------------------------------ */
+  const [leadId, setLeadId] = useState<string>(() => searchParams.get('lead') ?? '')
+  const [packageId, setPackageId] = useState<string>('')
+  const [kwOverride, setKwOverride] = useState<number | null>(null)
+  const [typeOverride, setTypeOverride] = useState<SystemType | null>(null)
+  const [marginOverride, setMarginOverride] = useState<number | null>(null)
+  const [discount, setDiscount] = useState(0)
+  /** Null means "use the suggestion"; an edit takes a copy. */
+  const [editedLines, setEditedLines] = useState<DraftLine[] | null>(null)
+  const [addItemId, setAddItemId] = useState('')
+  const [saved, setSaved] = useState<{ reference: string; status: string } | null>(null)
+
+  const lead = LEADS.find((l) => l.id === leadId)
+  const enquiry = useEnquiry(lead?.id).data
+  const estimate = enquiry?.estimates[0]
+  const pkg = PACKAGES.find((p) => p.id === packageId)
+
+  const systemKw = kwOverride ?? pkg?.sizeKw ?? estimate?.recommendedKw ?? lead?.estimatedKw ?? 0
+  const systemType: SystemType = typeOverride ?? pkg?.systemType ?? estimate?.systemType ?? 'hybrid'
+  const margin = marginOverride ?? defaultMargin
+
+  // Recomputed as the inputs change; the React Compiler memoises it.
+  const suggestion = suggestBom({
+    systemKw,
+    systemType,
+    stock: STOCK,
+    panelWatts: hardware.panelWatts,
+    batteryKwh: hardware.batteryKwh,
+    batteriesIncluded,
+  })
+
+  const lines: DraftLine[] = editedLines ?? suggestion.lines
+  const bom = lines
+    .map((line) => {
+      const item = STOCK.find((s) => s.id === line.stockItemId)
+      if (!item) return null
+      return {
+        ...line,
+        item,
+        lineTotal: line.quantity * item.unitCost,
+        available: item.onHand - item.reserved,
+      }
+    })
+    .filter((line): line is NonNullable<typeof line> => line !== null)
+
+  // Any change to what the system IS rebuilds the suggestion.
+  function resize(change: () => void) {
+    change()
+    setEditedLines(null)
+    setSaved(null)
   }
 
-  const bom = buildBom(pkg, STOCK)
+  function editLines(update: (current: DraftLine[]) => DraftLine[]) {
+    setEditedLines(update(lines.map((l) => ({ ...l }))))
+    setSaved(null)
+  }
 
   const materialCost = bom.reduce((sum, line) => sum + line.lineTotal, 0)
-  // Labour and overhead as a share of material cost. The percentage is a
-  // setting, so finance can move it without waiting for a deploy.
   const labourCost = materialCost * (labourPct / 100)
   const totalCost = materialCost + labourCost
   const listPrice = totalCost / (1 - margin / 100)
   const sellPrice = discountAllowed ? listPrice * (1 - discount / 100) : listPrice
-
-  /* HOW FAR IS THIS FROM THE ADVERTISED PRICE?
-     The quote is built bottom-up from the bill of materials; the website
-     advertises a top-down "from" price for the same package. Nothing was
-     comparing the two, so a rep could send a quote 30% above the figure the
-     customer had already read on the public site and only find out when the
-     customer said so. */
-  const publishedPrice = pkg.priceFrom
-  const priceVariance = publishedPrice > 0 ? (sellPrice - publishedPrice) / publishedPrice : 0
-
   const anyShort = bom.some((line) => line.available < line.quantity)
-  const needsApproval = discountAllowed && discount > discountAuthority
+  const needsApproval = discountAllowed && discount > discountAuthority && user?.role !== 'admin'
+  const leadHasLiveContract = contracts.some(
+    (c) =>
+      c.status !== 'cancelled' &&
+      quotations.find((q) => q.id === c.quotationId)?.leadId === lead?.id,
+  )
 
-  function handleSaveDraft() {
-    setSavedRef(null)
+  /* --- Actions ------------------------------------------------------------- */
+  const saveQuotation = useSaveQuotation()
+  const sendQuotation = useSendQuotation()
+  const setQuotationStatus = useSetQuotationStatus()
+  const approveDiscount = useApproveDiscount()
+  const discardQuotation = useDiscardQuotation()
+  const createContract = useCreateContract()
+  const counterSign = useCounterSignContract()
+  const cancelContract = useCancelContract()
+
+  const [declining, setDeclining] = useState<QuotationRow | null>(null)
+  const [printing, setPrinting] = useState<QuotationRow | null>(null)
+  const printItems = useQuotationItems(printing?.id).data ?? []
+
+  function handleSave() {
+    if (!lead) return
+    setSaved(null)
     saveQuotation.mutate(
       {
         leadId: lead.id,
-        packageId: pkg.id,
-        systemKw: pkg.sizeKw,
-        systemType: pkg.systemType,
-        panelCount: bom.find((l) => l.item.category === 'panel')?.quantity,
-        batteryCount: bom.find((l) => l.item.category === 'battery')?.quantity ?? 0,
-        materialCost,
-        labourCost,
+        packageId: pkg?.id,
+        systemKw,
+        systemType,
+        panelCount:
+          bom.filter((l) => l.item.category === 'panel').reduce((s, l) => s + l.quantity, 0) ||
+          undefined,
+        batteryCount: bom
+          .filter((l) => l.item.category === 'battery')
+          .reduce((s, l) => s + l.quantity, 0),
+        materialCost: Math.round(materialCost * 100) / 100,
+        labourCost: Math.round(labourCost * 100) / 100,
         marginPct: margin,
         discountPct: discountAllowed ? discount : 0,
         totalPrice: Math.round(sellPrice),
@@ -227,32 +213,71 @@ export function QuotesPage() {
           unitPrice: line.item.unitCost,
         })),
       },
-      { onSuccess: (result) => setSavedRef(result.reference) },
+      {
+        onSuccess: (result) => {
+          setSaved({ reference: result.reference, status: result.status })
+          setDiscount(0)
+        },
+      },
     )
   }
 
-  /* Converting is one click for the rep and a chain of consequences in the
-     database, so the quotation is marked accepted first and the contract raised
-     from it — rather than the button doing something the audit trail cannot
-     later explain. */
-  function convertToContract(quotationId: string, leadId_: string, value: number) {
-    setQuotationStatus.mutate(
-      { id: quotationId, status: 'accepted' },
-      {
-        onSuccess: () => {
-          const matchedLead = LEADS.find((l) => l.id === leadId_)
-          createContract.mutate({
-            quotationId,
-            leadId: leadId_,
-            // A lead only has a client account once they have been converted.
-            // Until then the contract is raised unassigned and linked when the
-            // customer's portal account is created.
-            clientId: undefined,
-            contractValue: value || Math.round(sellPrice),
-          })
-          void matchedLead
-        },
+  function raiseContract(q: QuotationRow) {
+    createContract.mutate({ quotationId: q.id, leadId: q.leadId, contractValue: q.totalPrice })
+  }
+
+  function documentFor(q: QuotationRow): QuotationDocumentData {
+    return {
+      reference: q.reference,
+      issuedAt: q.sentAt ?? q.createdAt,
+      validUntil: q.validUntil,
+      customerName: q.leadName,
+      customerEmail: q.leadEmail,
+      siteAddress: q.leadAddress,
+      systemKw: q.systemKw,
+      systemType: q.systemType,
+      panelCount: q.panelCount,
+      batteryCount: q.batteryCount,
+      totalPrice: q.totalPrice,
+      discountPct: q.discountPct,
+      items: printItems,
+      split,
+      warranty: {
+        panelYears: company.warrantyPanelYears,
+        inverterYears: company.warrantyInverterYears,
+        batteryYears: company.warrantyBatteryYears,
+        workmanshipYears: company.warrantyWorkmanshipYears,
       },
+      company: {
+        name: company.name,
+        address: company.address,
+        email: company.email,
+        phone: company.phone,
+      },
+    }
+  }
+
+  /* Quotations are written by Sales, engineers and administrators; the
+     accountant opens this page for the contracts. Offering them buttons the
+     database then refuses would read as a fault. */
+  const writesQuotations =
+    user?.role === 'sales' || user?.role === 'admin' || user?.role === 'project_engineer'
+
+  const actionError =
+    sendQuotation.error ??
+    setQuotationStatus.error ??
+    approveDiscount.error ??
+    discardQuotation.error ??
+    createContract.error
+
+  if (packagesQuery.isLoading || stockQuery.isLoading || leadsQuery.isLoading) {
+    return (
+      <>
+        <PageHeader title="Quotations & BOM" />
+        <QueryState isLoading error={null}>
+          {null}
+        </QueryState>
+      </>
     )
   }
 
@@ -260,13 +285,26 @@ export function QuotesPage() {
     <>
       <PageHeader
         title="Quotations & BOM"
-        description="Build a quote from a package; the bill of materials and margin calculate themselves."
+        description="Size the system, check the bill of materials, price it and send it."
         actions={
-          <Button variant="primary" onClick={handleSaveDraft} disabled={saveQuotation.isPending}>
-            {saveQuotation.isPending ? 'Saving…' : 'Save quotation'}
-          </Button>
+          writesQuotations ? (
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={saveQuotation.isPending || !lead || bom.length === 0}
+            >
+              {saveQuotation.isPending ? 'Saving…' : 'Save quotation'}
+            </Button>
+          ) : undefined
         }
       />
+
+      {!writesQuotations && (
+        <p className="small muted" style={{ marginBottom: 'var(--space-4)' }}>
+          Quotations are prepared and sent by Sales. From here you can raise a contract from an
+          accepted quotation, counter-sign, and print any quotation.
+        </p>
+      )}
 
       <div className="grid grid--4" style={{ marginBottom: 'var(--space-6)' }}>
         <StatTile label="Material cost" value={currencyCompact(materialCost)} />
@@ -274,16 +312,14 @@ export function QuotesPage() {
         <StatTile
           label="Quoted price"
           value={currencyCompact(sellPrice)}
-          /* Against the price this package is advertised at. Rising is bad
-             here: it means the customer is being asked for more than the site
-             led them to expect. */
           delta={
-            publishedPrice > 0
-              ? `${priceVariance >= 0 ? '+' : ''}${Math.round(priceVariance * 100)}% vs advertised ${currencyCompact(publishedPrice)}`
+            pkg && pkg.priceFrom > 0
+              ? `${sellPrice >= pkg.priceFrom ? '+' : ''}${Math.round(
+                  ((sellPrice - pkg.priceFrom) / pkg.priceFrom) * 100,
+                )}% vs advertised ${currencyCompact(pkg.priceFrom)}`
               : undefined
           }
-          direction={Math.abs(priceVariance) < 0.05 ? 'flat' : priceVariance > 0 ? 'up' : 'down'}
-          invertDelta
+          direction="flat"
         />
         <StatTile
           label="Gross margin"
@@ -296,7 +332,7 @@ export function QuotesPage() {
       <div className="grid grid--2" style={{ alignItems: 'start' }}>
         {/* --------------------------------------------- CONFIGURATION */}
         <Card>
-          <CardHeader title="Quote configuration" />
+          <CardHeader title="1 · Who and what" />
           <CardBody>
             <div className="stack">
               <div className="field">
@@ -307,36 +343,121 @@ export function QuotesPage() {
                   id="qlead"
                   className="select"
                   value={leadId}
-                  onChange={(e) => setLeadId(e.target.value)}
+                  onChange={(e) =>
+                    resize(() => {
+                      setLeadId(e.target.value)
+                      setPackageId('')
+                      setKwOverride(null)
+                      setTypeOverride(null)
+                    })
+                  }
                 >
+                  <option value="" disabled>
+                    Choose a lead…
+                  </option>
                   {LEADS.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {l.name} — {l.location} ({l.estimatedKw} kW)
+                      {l.name} · {l.email}
+                      {l.location ? ` · ${l.location}` : ''}
                     </option>
                   ))}
                 </select>
-                <span className="field__hint">
-                  Estimator submission suggests {lead.estimatedKw} kW from a{' '}
-                  {currency(lead.monthlyBill)}/month bill.
-                </span>
+                {leadHasLiveContract && (
+                  <span className="field__hint" style={{ color: 'var(--danger-fg)' }}>
+                    This customer already has a contract in progress. A new quotation can be saved,
+                    but its contract will be refused until the current one is cancelled.
+                  </span>
+                )}
               </div>
+
+              {/* What they told the estimator — the starting point for sizing. */}
+              {estimate && (
+                <div
+                  className="small"
+                  style={{
+                    padding: 'var(--space-3)',
+                    background: 'var(--ink-50)',
+                    borderRadius: 'var(--radius)',
+                  }}
+                >
+                  <div className="row row--between row--wrap">
+                    <span>
+                      Estimator recommended <strong>{estimate.recommendedKw} kWp</strong>{' '}
+                      {estimate.systemType ? SYSTEM_TYPE_LABEL[estimate.systemType] : ''} from{' '}
+                      {estimate.appliances.length} appliances ({estimate.monthlyKwh} kWh/month)
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        resize(() => {
+                          setPackageId('')
+                          setKwOverride(estimate.recommendedKw)
+                          setTypeOverride(estimate.systemType)
+                        })
+                      }
+                    >
+                      Use this
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="field">
                 <label className="field__label" htmlFor="qpkg">
-                  Package
+                  Start from a package <span className="dim">(optional)</span>
                 </label>
                 <select
                   id="qpkg"
                   className="select"
                   value={packageId}
-                  onChange={(e) => setPackageId(e.target.value)}
+                  onChange={(e) =>
+                    resize(() => {
+                      setPackageId(e.target.value)
+                      setKwOverride(null)
+                      setTypeOverride(null)
+                    })
+                  }
                 >
+                  <option value="">Custom size</option>
                   {PACKAGES.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} — {p.sizeKw} kWp {SYSTEM_TYPE_LABEL[p.systemType]}
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field__label" htmlFor="qkw">
+                    System size (kWp)
+                  </label>
+                  <input
+                    id="qkw"
+                    className="input"
+                    type="number"
+                    min={0.5}
+                    step={0.1}
+                    value={systemKw || ''}
+                    onChange={(e) => resize(() => setKwOverride(Number(e.target.value) || 0))}
+                  />
+                </div>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field__label" htmlFor="qtype">
+                    System type
+                  </label>
+                  <select
+                    id="qtype"
+                    className="select"
+                    value={systemType}
+                    onChange={(e) => resize(() => setTypeOverride(e.target.value as SystemType))}
+                  >
+                    <option value="on_grid">{SYSTEM_TYPE_LABEL.on_grid}</option>
+                    <option value="hybrid">{SYSTEM_TYPE_LABEL.hybrid}</option>
+                    <option value="off_grid">{SYSTEM_TYPE_LABEL.off_grid}</option>
+                  </select>
+                </div>
               </div>
 
               <div className="field">
@@ -349,7 +470,7 @@ export function QuotesPage() {
                   min={10}
                   max={60}
                   value={margin}
-                  onChange={(e) => setMargin(Number(e.target.value))}
+                  onChange={(e) => setMarginOverride(Number(e.target.value))}
                 />
                 <span className="field__hint">
                   The starting margin comes from Settings and can be changed per quote.
@@ -371,10 +492,10 @@ export function QuotesPage() {
                   />
                   <span
                     className="field__hint"
-                    style={{ color: needsApproval ? 'var(--danger-fg)' : undefined }}
+                    style={{ color: needsApproval ? 'var(--warning-fg)' : undefined }}
                   >
                     {needsApproval
-                      ? `Above your ${discountAuthority}% authority — the database will hold this for administrator approval and write it to the audit log.`
+                      ? `Above your ${discountAuthority}% authority — it saves as "pending approval" and an administrator is notified to approve it before it can be sent.`
                       : `You may discount up to ${discountAuthority}% without approval.`}
                   </span>
                 </div>
@@ -395,7 +516,7 @@ export function QuotesPage() {
                   <span className="muted">Total cost</span>
                   <span className="num strong">{currency(totalCost)}</span>
                 </div>
-                {discount > 0 && (
+                {discount > 0 && discountAllowed && (
                   <>
                     <div className="row row--between">
                       <span className="muted">List price</span>
@@ -424,107 +545,202 @@ export function QuotesPage() {
           </CardBody>
         </Card>
 
-        {/* ------------------------------------------- GENERATED BOM */}
+        {/* ------------------------------------------- BILL OF MATERIALS */}
         <Card>
           <CardHeader
-            title="Generated bill of materials"
+            title="2 · Bill of materials"
             action={
-              <Badge tone={anyShort ? 'danger' : 'success'}>
-                {anyShort ? 'Stock shortfall' : 'Stock available'}
+              <Badge tone={anyShort ? 'warning' : 'success'}>
+                {anyShort ? 'Some stock to order' : 'In stock'}
               </Badge>
             }
           />
           <CardBody>
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th className="table__num">Qty</th>
-                    <th className="table__num">Available</th>
-                    <th className="table__num">Line total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bom.map((line) => (
-                    <tr key={line.item.id}>
-                      <td>
-                        <div className="strong small">{line.item.name}</div>
-                        <div className="xs dim">{line.item.sku}</div>
-                      </td>
-                      <td className="table__num strong">{line.quantity}</td>
-                      <td className="table__num">
-                        <span
-                          style={{
-                            color: line.available < line.quantity ? 'var(--danger-fg)' : undefined,
-                          }}
-                        >
-                          {line.available}
-                        </span>
-                      </td>
-                      <td className="table__num">{currency(line.lineTotal)}</td>
+            {suggestion.warnings.length > 0 && (
+              <div
+                className="small"
+                style={{
+                  marginBottom: 'var(--space-3)',
+                  padding: 'var(--space-3)',
+                  background: 'var(--warning-bg)',
+                  color: 'var(--warning-fg)',
+                  borderRadius: 'var(--radius)',
+                }}
+              >
+                {suggestion.warnings.map((w) => (
+                  <div key={w}>⚠ {w}</div>
+                ))}
+              </div>
+            )}
+
+            {bom.length === 0 ? (
+              <p className="small muted">
+                {lead
+                  ? 'Enter a system size, or add items below.'
+                  : 'Choose a lead to start a quotation.'}
+              </p>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th className="table__num">Qty</th>
+                      <th className="table__num">Free</th>
+                      <th className="table__num">Line total</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {bom.map((line, index) => (
+                      <tr key={`${line.stockItemId}-${index}`}>
+                        <td>
+                          <select
+                            className="select"
+                            style={{ fontSize: 'var(--text-xs)', minWidth: 160 }}
+                            value={line.stockItemId}
+                            onChange={(e) =>
+                              editLines((current) =>
+                                current.map((l, i) =>
+                                  i === index
+                                    ? { ...l, stockItemId: e.target.value, rule: undefined }
+                                    : l,
+                                ),
+                              )
+                            }
+                            aria-label="Item"
+                          >
+                            {STOCK.filter((s) => s.category === line.item.category).map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                          {line.rule && <div className="xs dim">{line.rule}</div>}
+                        </td>
+                        <td className="table__num">
+                          <input
+                            className="input"
+                            type="number"
+                            min={1}
+                            style={{ width: 72 }}
+                            value={line.quantity}
+                            onChange={(e) =>
+                              editLines((current) =>
+                                current.map((l, i) =>
+                                  i === index
+                                    ? { ...l, quantity: Math.max(1, Number(e.target.value) || 1) }
+                                    : l,
+                                ),
+                              )
+                            }
+                            aria-label={`Quantity of ${line.item.name}`}
+                          />
+                        </td>
+                        <td className="table__num">
+                          <span
+                            style={{
+                              color:
+                                line.available < line.quantity ? 'var(--danger-fg)' : undefined,
+                            }}
+                          >
+                            {line.available}
+                          </span>
+                        </td>
+                        <td className="table__num">{currency(line.lineTotal)}</td>
+                        <td>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              editLines((current) => current.filter((_, i) => i !== index))
+                            }
+                            aria-label={`Remove ${line.item.name}`}
+                          >
+                            ✕
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="row" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+              <select
+                className="select"
+                value={addItemId}
+                onChange={(e) => setAddItemId(e.target.value)}
+                aria-label="Add an item"
+              >
+                <option value="">Add an item from the catalogue…</option>
+                {STOCK.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {STOCK_CATEGORY_LABEL[s.category]} · {s.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                disabled={!addItemId}
+                onClick={() => {
+                  editLines((current) => [...current, { stockItemId: addItemId, quantity: 1 }])
+                  setAddItemId('')
+                }}
+              >
+                Add
+              </Button>
+              {editedLines && (
+                <Button variant="ghost" onClick={() => setEditedLines(null)}>
+                  Reset
+                </Button>
+              )}
             </div>
 
             {anyShort && (
-              <p
-                className="small"
-                style={{
-                  marginTop: 'var(--space-4)',
-                  padding: 'var(--space-3)',
-                  background: 'var(--danger-bg)',
-                  color: 'var(--danger-fg)',
-                  borderRadius: 'var(--radius)',
-                }}
-              >
-                ⚠ One or more items have insufficient free stock. The quote can still be sent, but
-                procurement must be raised before the contract is signed — otherwise the reservation
-                will fail.
+              <p className="small muted" style={{ marginTop: 'var(--space-3)' }}>
+                Items in red are not all free in the warehouse. The quotation can still go out —
+                when the contract is counter-signed the shortfall is held as &ldquo;short&rdquo; and
+                listed under Purchasing for the inventory manager to order.
               </p>
             )}
 
-            {savedRef && (
+            {saved && (
               <p
                 className="small"
                 style={{
                   marginTop: 'var(--space-4)',
                   padding: 'var(--space-3)',
-                  background: 'var(--success-bg)',
-                  color: 'var(--success-fg)',
+                  background:
+                    saved.status === 'pending_approval' ? 'var(--warning-bg)' : 'var(--success-bg)',
+                  color:
+                    saved.status === 'pending_approval' ? 'var(--warning-fg)' : 'var(--success-fg)',
                   borderRadius: 'var(--radius)',
                 }}
               >
-                Saved as <strong>{savedRef}</strong>. It is in the list below as a draft — send it
-                when you are ready.
+                Saved as <strong>{saved.reference}</strong>.{' '}
+                {saved.status === 'pending_approval'
+                  ? 'The discount needs an administrator’s approval — they have been notified. It can be sent once approved.'
+                  : 'It is in the list below as a draft — send it when you are ready.'}
               </p>
             )}
 
             <FormError error={saveQuotation.error} />
-
-            <p className="xs dim" style={{ marginTop: 'var(--space-4)' }}>
-              Saving records this bill of materials against the quotation, so the quote and the
-              materials it commits can never drift apart. Stock is reserved later, when the contract
-              is counter-signed.
-            </p>
           </CardBody>
         </Card>
       </div>
 
       {/* ============================================================
           THE PIPELINE
-          ------------------------------------------------------------
-          Everything saved above, and what has to happen next to each
-          one. Kept on the same screen as the builder because a rep who
-          has to go looking for their drafts stops sending them. */}
+          Everything saved above, and what has to happen next to each. */}
       <Card style={{ marginTop: 'var(--space-6)' }}>
         <CardHeader
           title="Quotations"
           action={<span className="xs dim">{quotations.length} most recent</span>}
         />
         <CardBody>
+          <FormError error={actionError} />
           <QueryState
             isLoading={quotationsQuery.isLoading}
             error={quotationsQuery.error as Error | null}
@@ -551,51 +767,123 @@ export function QuotesPage() {
                     <tr key={q.id}>
                       <td>
                         <code>{q.reference}</code>
+                        <div className="xs dim">v{q.version}</div>
                       </td>
-                      <td className="strong small">{q.leadName}</td>
+                      <td>
+                        <div className="strong small">{q.leadName}</div>
+                        <div className="xs dim">{q.leadEmail}</div>
+                      </td>
                       <td className="small">
                         {q.systemKw} kW {SYSTEM_TYPE_LABEL[q.systemType]}
                         {q.discountPct > 0 && (
-                          <span className="xs dim"> · {q.discountPct}% off</span>
+                          <span className="xs dim">
+                            {' '}
+                            · {q.discountPct}% off{q.discountApproved ? ' (approved)' : ''}
+                          </span>
                         )}
                       </td>
                       <td className="table__num">{currency(q.totalPrice)}</td>
                       <td>
                         <Badge tone={QUOTATION_STATUS_TONE[q.status] ?? 'neutral'}>
-                          {humanize(q.status)}
+                          {q.status === 'pending_approval'
+                            ? 'Awaiting approval'
+                            : humanize(q.status)}
                         </Badge>
+                        {q.rejectionReason && (
+                          <div className="xs dim" style={{ maxWidth: '28ch' }}>
+                            {q.rejectionReason}
+                          </div>
+                        )}
                       </td>
                       <td className="small">{q.validUntil ? date(q.validUntil) : '—'}</td>
                       <td>
-                        {q.status === 'draft' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={sendQuotation.isPending}
-                            onClick={() => sendQuotation.mutate({ id: q.id })}
-                          >
-                            Send
-                          </Button>
-                        )}
-                        {q.status === 'sent' && !q.hasContract && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            disabled={createContract.isPending}
-                            onClick={() => convertToContract(q.id, q.leadId, q.totalPrice)}
-                          >
-                            Customer accepted
-                          </Button>
-                        )}
-                        {q.hasContract && <span className="xs dim">Contract raised</span>}
+                        <div className="row row--wrap" style={{ gap: 4 }}>
+                          {q.status === 'draft' && writesQuotations && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={sendQuotation.isPending}
+                              onClick={() => sendQuotation.mutate({ id: q.id })}
+                              title="Marks it sent and notifies the customer"
+                            >
+                              Send
+                            </Button>
+                          )}
+                          {q.status === 'pending_approval' && user?.role === 'admin' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={approveDiscount.isPending}
+                              onClick={() => approveDiscount.mutate({ id: q.id, userId: user.id })}
+                            >
+                              Approve discount
+                            </Button>
+                          )}
+                          {q.status === 'pending_approval' && user?.role !== 'admin' && (
+                            <span className="xs dim">Waiting for an administrator</span>
+                          )}
+                          {q.status === 'sent' && writesQuotations && (
+                            <>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                disabled={setQuotationStatus.isPending}
+                                onClick={() =>
+                                  setQuotationStatus.mutate({ id: q.id, status: 'accepted' })
+                                }
+                                title="Record that the customer said yes — by phone, email or in person"
+                              >
+                                Customer accepted
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setDeclining(q)}>
+                                Declined…
+                              </Button>
+                            </>
+                          )}
+                          {q.status === 'accepted' && !q.hasContract && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={createContract.isPending}
+                              onClick={() => raiseContract(q)}
+                            >
+                              Raise contract
+                            </Button>
+                          )}
+                          {q.hasContract && <span className="xs dim">Contract raised</span>}
+                          {q.status !== 'draft' && q.status !== 'pending_approval' && (
+                            <Button variant="ghost" size="sm" onClick={() => setPrinting(q)}>
+                              Print
+                            </Button>
+                          )}
+                          {(q.status === 'draft' || q.status === 'pending_approval') && (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={() => setPrinting(q)}>
+                                Preview
+                              </Button>
+                              {writesQuotations && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={discardQuotation.isPending}
+                                  onClick={() => {
+                                    if (window.confirm(`Discard draft ${q.reference}?`)) {
+                                      discardQuotation.mutate({ id: q.id })
+                                    }
+                                  }}
+                                >
+                                  Discard
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
-            <FormError error={sendQuotation.error ?? createContract.error} />
           </QueryState>
         </CardBody>
       </Card>
@@ -610,7 +898,7 @@ export function QuotesPage() {
             isEmpty={contracts.length === 0}
             emptyIcon="✍️"
             emptyTitle="No contracts yet"
-            emptyMessage="Mark a sent quotation as accepted to raise one."
+            emptyMessage="Raise one from an accepted quotation."
           >
             <p className="small muted" style={{ marginBottom: 'var(--space-4)' }}>
               Counter-signing is the most consequential action in this application. It creates the
@@ -622,11 +910,13 @@ export function QuotesPage() {
               {contracts.map((c) => (
                 <div
                   key={c.id}
-                  className="row row--between"
+                  className="row row--between row--wrap"
                   style={{
                     padding: 'var(--space-3)',
                     border: '1px solid var(--border)',
                     borderRadius: 'var(--radius)',
+                    gap: 'var(--space-3)',
+                    opacity: c.status === 'cancelled' ? 0.6 : 1,
                   }}
                 >
                   <div>
@@ -637,36 +927,117 @@ export function QuotesPage() {
                       </Badge>
                     </div>
                     <div className="xs dim" style={{ marginTop: 2 }}>
-                      {c.clientName} · {currency(c.contractValue)} · {c.downPaymentPct}/
-                      {c.deliveryPct}/{c.commissioningPct} split
+                      {c.clientId ? c.clientName : 'No customer account yet'} ·{' '}
+                      {currency(c.contractValue)} · {c.downPaymentPct}/{c.deliveryPct}/
+                      {c.commissioningPct} split
                       {c.clientSignedAt
                         ? ` · signed by ${c.clientSignatureName} on ${date(c.clientSignedAt)}`
-                        : ' · not yet signed by the customer'}
+                        : c.status === 'awaiting_client'
+                          ? ' · not yet signed by the customer'
+                          : ''}
                     </div>
+                    {!c.clientId && c.status === 'awaiting_client' && (
+                      <div className="xs" style={{ color: 'var(--warning-fg)' }}>
+                        The customer has been emailed to create an account with the address on their
+                        enquiry — it is linked the moment they do, and appears on their dashboard to
+                        sign.
+                      </div>
+                    )}
                   </div>
 
-                  {c.status === 'awaiting_company' && user && (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      disabled={counterSign.isPending}
-                      onClick={() => counterSign.mutate({ contractId: c.id, userId: user.id })}
-                    >
-                      Counter-sign &amp; start the project
-                    </Button>
-                  )}
-                  {c.status === 'awaiting_client' && (
-                    <span className="xs dim">Waiting on the customer</span>
-                  )}
-                  {c.status === 'executed' && <span className="xs dim">Project running</span>}
+                  <div className="row" style={{ gap: 4 }}>
+                    {c.status === 'awaiting_company' && user && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={counterSign.isPending}
+                        onClick={() => counterSign.mutate({ contractId: c.id, userId: user.id })}
+                      >
+                        Counter-sign &amp; start the project
+                      </Button>
+                    )}
+                    {(c.status === 'awaiting_client' || c.status === 'awaiting_company') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={cancelContract.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Withdraw ${c.reference}? The customer is told it is no longer active.`,
+                            )
+                          ) {
+                            cancelContract.mutate({ id: c.id })
+                          }
+                        }}
+                      >
+                        Withdraw
+                      </Button>
+                    )}
+                    {c.status === 'executed' && (
+                      <Link className="btn btn--ghost btn--sm" to="/admin/projects">
+                        Project running →
+                      </Link>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
 
-            <FormError error={counterSign.error} />
+            <FormError error={counterSign.error ?? cancelContract.error} />
           </QueryState>
         </CardBody>
       </Card>
+
+      {/* --------------------------------------------- CUSTOMER DECLINED */}
+      <Modal
+        open={declining !== null}
+        onClose={() => {
+          setDeclining(null)
+          setQuotationStatus.reset()
+        }}
+        title={declining ? `Declined · ${declining.reference}` : 'Declined'}
+      >
+        {declining && (
+          <form
+            className="stack"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const reason = String(new FormData(event.currentTarget).get('reason') ?? '')
+              setQuotationStatus.mutate(
+                { id: declining.id, status: 'rejected', reason },
+                { onSuccess: () => setDeclining(null) },
+              )
+            }}
+          >
+            <div className="field">
+              <label className="field__label" htmlFor="decline-why">
+                Why did they say no?
+              </label>
+              <input
+                id="decline-why"
+                name="reason"
+                className="input"
+                required
+                placeholder="Price, timing, went with a competitor…"
+              />
+              <span className="field__hint">
+                Kept on the quotation. A revised version can be built above at any time.
+              </span>
+            </div>
+            <FormError error={setQuotationStatus.error} />
+            <Button type="submit" variant="primary" block disabled={setQuotationStatus.isPending}>
+              Record it
+            </Button>
+          </form>
+        )}
+      </Modal>
+
+      <QuotationDocument
+        open={printing !== null}
+        onClose={() => setPrinting(null)}
+        data={printing ? documentFor(printing) : null}
+      />
     </>
   )
 }

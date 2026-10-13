@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -14,6 +14,7 @@ import { datedFilename, downloadCsv } from '@/lib/csv'
 import { useStaff } from '@/lib/queries/admin'
 import {
   useDeletePayrollLine,
+  useFieldHours,
   useOpenPayrollRun,
   usePayrollPeriod,
   useSavePayrollLine,
@@ -82,6 +83,14 @@ export function HrPayrollPage() {
   const [editing, setEditing] = useState<PayrollLine | null>(null)
   const [composing, setComposing] = useState(false)
 
+  /* What the field app logged for each person this period, shown beside the
+     hours inputs so the register and the field cannot quietly disagree. */
+  const fieldHours = useFieldHours(bounds.start, bounds.end).data ?? {}
+  const [formUser, setFormUser] = useState('')
+  const regularRef = useRef<HTMLInputElement>(null)
+  const overtimeRef = useRef<HTMLInputElement>(null)
+  const logged = fieldHours[formUser || editing?.userId || '']
+
   const gross = lines.reduce((sum, l) => sum + l.grossPay, 0)
   const deductions = lines.reduce((sum, l) => sum + l.deductions, 0)
   const net = lines.reduce((sum, l) => sum + l.netPay, 0)
@@ -92,6 +101,7 @@ export function HrPayrollPage() {
   function closeForm() {
     setComposing(false)
     setEditing(null)
+    setFormUser('')
     saveLine.reset()
   }
 
@@ -368,6 +378,7 @@ export function HrPayrollPage() {
               className="select"
               required
               defaultValue={editing?.userId ?? ''}
+              onChange={(e) => setFormUser(e.target.value)}
             >
               <option value="">Choose…</option>
               {staff.map((member) => (
@@ -395,6 +406,7 @@ export function HrPayrollPage() {
                 step="0.25"
                 min="0"
                 defaultValue={editing?.regularHours ?? 0}
+                ref={regularRef}
               />
             </div>
             <div className="field" style={{ flex: 1 }}>
@@ -409,9 +421,43 @@ export function HrPayrollPage() {
                 step="0.25"
                 min="0"
                 defaultValue={editing?.overtimeHours ?? 0}
+                ref={overtimeRef}
               />
             </div>
           </div>
+
+          {logged && (
+            <div
+              className="row row--between row--wrap small"
+              style={{
+                padding: 'var(--space-2) var(--space-3)',
+                background: 'var(--ink-50)',
+                borderRadius: 'var(--radius)',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <span>
+                Logged in the field this period: <strong>{logged.regular} h</strong>
+                {logged.overtime > 0 && (
+                  <>
+                    {' '}
+                    + <strong>{logged.overtime} h overtime</strong>
+                  </>
+                )}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (regularRef.current) regularRef.current.value = String(logged.regular)
+                  if (overtimeRef.current) overtimeRef.current.value = String(logged.overtime)
+                }}
+              >
+                Use these hours
+              </Button>
+            </div>
+          )}
 
           <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
             <div className="field" style={{ flex: 1 }}>

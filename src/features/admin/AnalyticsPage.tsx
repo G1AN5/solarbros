@@ -13,6 +13,8 @@ import { useAllAppointments, useAllTickets, useCrew, useProjects } from '@/lib/q
 import { settingNum, usePricingConfig, useSettings } from '@/lib/queries/settings'
 import { systemPrice } from '@/lib/solar-estimator'
 import { useAllInvoices, useStock } from '@/lib/queries/inventory-finance'
+import { useMonthlyCollections } from '@/lib/queries/payments'
+import { stockLevel } from '@/lib/stock'
 
 /* ============================================================================
    AnalyticsPage — the Executive Analytics Dashboard.
@@ -137,7 +139,16 @@ export function AnalyticsPage() {
   const STOCK = stockQuery.data ?? []
   const TICKETS = ticketsQuery.data ?? []
 
-  const revenueSeries = revenueByMonth(INVOICES)
+  /* Collected money by the month it ARRIVED, from the database (0075). The
+     invoice-based figure below is the fallback for when that cannot be read:
+     it buckets by the invoice's issue date, which is close but not the same. */
+  const collections = useMonthlyCollections(8).data
+  const revenueSeries = collections
+    ? collections.map((c) => ({
+        label: MONTH_LABELS[new Date(`${c.month}T00:00:00`).getMonth()],
+        value: c.collected,
+      }))
+    : revenueByMonth(INVOICES)
   const crewLoad = utilisation(
     crewQuery.data ?? [],
     appointmentsQuery.data ?? [],
@@ -171,7 +182,7 @@ export function AnalyticsPage() {
      That is the most consequential kind of placeholder: nobody doubts a figure
      that has always been there. */
   const thisMonth = new Date()
-  const revenueThisMonth = INVOICES.filter((invoice) => {
+  const invoiceRevenueThisMonth = INVOICES.filter((invoice) => {
     if (!invoice.issuedAt) return false
     const issued = new Date(invoice.issuedAt)
     return (
@@ -181,7 +192,7 @@ export function AnalyticsPage() {
 
   // Last month, for a comparison that is measured rather than asserted.
   const lastMonthDate = new Date(thisMonth.getFullYear(), thisMonth.getMonth() - 1, 1)
-  const revenueLastMonth = INVOICES.filter((invoice) => {
+  const invoiceRevenueLastMonth = INVOICES.filter((invoice) => {
     if (!invoice.issuedAt) return false
     const issued = new Date(invoice.issuedAt)
     return (
@@ -190,13 +201,23 @@ export function AnalyticsPage() {
     )
   }).reduce((sum, invoice) => sum + invoice.amountPaid, 0)
 
+  const revenueThisMonth = collections
+    ? (collections[collections.length - 1]?.collected ?? 0)
+    : invoiceRevenueThisMonth
+  const revenueLastMonth = collections
+    ? (collections[collections.length - 2]?.collected ?? 0)
+    : invoiceRevenueLastMonth
+
   const revenueDelta =
     revenueLastMonth > 0
       ? `${Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100)}% vs last month`
       : 'No comparison yet'
   const overdue = INVOICES.filter((i) => i.status === 'overdue')
   const overdueTotal = overdue.reduce((sum, i) => sum + (i.amount - i.amountPaid), 0)
-  const lowStock = STOCK.filter((s) => s.onHand - s.reserved < s.reorderPoint)
+  const lowStock = STOCK.filter((s) => {
+    const level = stockLevel(s)
+    return level === 'reorder' || level === 'oversold'
+  })
   const urgentTickets = TICKETS.filter((t) => t.priority === 'urgent' && t.status !== 'resolved')
 
   return (

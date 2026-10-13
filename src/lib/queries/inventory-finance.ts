@@ -556,3 +556,104 @@ export function useDeleteStockItem() {
     },
   })
 }
+
+/* ============================================================================
+   WARRANTY CLAIMS WITH THE MANUFACTURER (RMA)
+   ----------------------------------------------------------------------------
+   A claim could be opened and then nothing: there was no list of claims and no
+   way to record that it had been filed, what the manufacturer decided, or
+   that the replacement arrived. The manufacturer has no login here, so each
+   step is recorded on their behalf; the database stamps who recorded it and
+   when (0072), and marks the old unit replaced when its replacement arrives.
+   ========================================================================== */
+
+export type RmaStatus =
+  | 'draft'
+  | 'filed'
+  | 'under_assessment'
+  | 'approved'
+  | 'rejected'
+  | 'replacement_received'
+  | 'closed'
+
+export interface RmaClaim {
+  id: string
+  reference: string
+  status: RmaStatus
+  manufacturer: string
+  faultDescription: string
+  externalReference: string | null
+  decisionNotes: string | null
+  filedAt: string | null
+  decisionAt: string | null
+  createdAt: string
+  serialNumber: string
+  productName: string
+  projectReference: string
+  clientName: string
+}
+
+export function useRmaClaims() {
+  return useQuery({
+    queryKey: ['inv', 'rma', 'claims'],
+    queryFn: async (): Promise<RmaClaim[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('rma_claims')
+        .select(
+          'id, claim_reference, status, manufacturer, fault_description, external_reference, decision_notes, filed_at, decision_at, created_at, asset:serialised_assets!rma_claims_serialised_asset_id_fkey(serial_number, product_name, project:projects(reference), client:profiles!serialised_assets_client_id_fkey(full_name))',
+        )
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        reference: row.claim_reference,
+        status: row.status,
+        manufacturer: row.manufacturer,
+        faultDescription: row.fault_description,
+        externalReference: row.external_reference,
+        decisionNotes: row.decision_notes,
+        filedAt: row.filed_at,
+        decisionAt: row.decision_at,
+        createdAt: row.created_at,
+        serialNumber: row.asset?.serial_number ?? '',
+        productName: row.asset?.product_name ?? '',
+        projectReference: row.asset?.project?.reference ?? '',
+        clientName: row.asset?.client?.full_name ?? '',
+      }))
+    },
+  })
+}
+
+export function useUpdateRma() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      status: RmaStatus
+      externalReference?: string
+      decisionNotes?: string
+    }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('rma_claims')
+        .update({
+          status: input.status,
+          external_reference: input.externalReference?.trim() || null,
+          decision_notes: input.decisionNotes?.trim() || null,
+        })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throwReadable(error)
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('That claim could not be updated — your role may not change it.')
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['inv'] })
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+    },
+  })
+}

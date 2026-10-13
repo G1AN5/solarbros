@@ -2,17 +2,45 @@ import { type FormEvent, useState } from 'react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Card, CardBody } from '@/components/ui/Card'
+import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { FormError } from '@/components/ui/FormError'
 import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatTile } from '@/components/ui/StatTile'
-import { date, yearsUntil } from '@/lib/format'
+import { date, humanize, yearsUntil } from '@/lib/format'
 import { QueryState } from '@/components/ui/QueryState'
-import { useAllAssets, useFileRma, useOpenRmaCount } from '@/lib/queries/inventory-finance'
+import {
+  type AssetWithProject,
+  type RmaClaim,
+  type RmaStatus,
+  useAllAssets,
+  useFileRma,
+  useOpenRmaCount,
+  useRmaClaims,
+  useUpdateRma,
+} from '@/lib/queries/inventory-finance'
 import { datedFilename, downloadCsv } from '@/lib/csv'
-import type { AssetWithProject } from '@/lib/queries/inventory-finance'
+
+const RMA_STATUS_LABEL: Record<RmaStatus, string> = {
+  draft: 'Draft — not sent yet',
+  filed: 'Filed with the manufacturer',
+  under_assessment: 'Being assessed',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  replacement_received: 'Replacement received',
+  closed: 'Closed',
+}
+
+const RMA_STATUS_TONE: Record<RmaStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
+  draft: 'neutral',
+  filed: 'info',
+  under_assessment: 'warning',
+  approved: 'success',
+  rejected: 'danger',
+  replacement_received: 'success',
+  closed: 'neutral',
+}
 
 /* ============================================================================
    AssetRegistryPage — Warranty & Asset Registry module.
@@ -50,6 +78,9 @@ export function AssetRegistryPage() {
      was the literal string "0" - and claims can now actually be filed. */
   const underWarranty = assets.filter((a) => yearsUntil(a.warrantyExpiresAt) > 0)
   const openClaims = useOpenRmaCount().data ?? 0
+  const claims = useRmaClaims().data ?? []
+  const updateRma = useUpdateRma()
+  const [progressing, setProgressing] = useState<RmaClaim | null>(null)
 
   const needle = search.trim().toLowerCase()
   const visible = needle
@@ -118,6 +149,11 @@ export function AssetRegistryPage() {
       header: 'Warranty',
       cell: (a) => {
         const yearsLeft = yearsUntil(a.warrantyExpiresAt)
+        if (a.status && a.status !== 'installed') {
+          return (
+            <Badge tone={a.status === 'faulty' ? 'danger' : 'neutral'}>{humanize(a.status)}</Badge>
+          )
+        }
         return (
           <div>
             <Badge tone={yearsLeft > 3 ? 'success' : yearsLeft > 0 ? 'warning' : 'danger'}>
@@ -216,6 +252,62 @@ export function AssetRegistryPage() {
         />
       </QueryState>
 
+      {/* ------------------------------------------- CLAIMS IN FLIGHT */}
+      <Card style={{ marginTop: 'var(--space-6)' }}>
+        <CardHeader
+          title="Warranty claims with manufacturers"
+          action={<span className="xs dim">Recorded on the manufacturer&apos;s behalf</span>}
+        />
+        <CardBody>
+          {claims.length === 0 ? (
+            <p className="small muted">
+              No claims. Open one from a unit above with &ldquo;File RMA&rdquo;.
+            </p>
+          ) : (
+            <div className="stack stack--sm">
+              {claims.map((claim) => (
+                <div
+                  key={claim.id}
+                  className="row row--between row--wrap"
+                  style={{
+                    padding: 'var(--space-3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)',
+                    gap: 'var(--space-3)',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div className="row" style={{ gap: 'var(--space-2)' }}>
+                      <code>{claim.reference}</code>
+                      <Badge tone={RMA_STATUS_TONE[claim.status]}>
+                        {RMA_STATUS_LABEL[claim.status]}
+                      </Badge>
+                    </div>
+                    <div className="xs dim" style={{ marginTop: 2 }}>
+                      {claim.productName} · <code>{claim.serialNumber}</code> · {claim.clientName}{' '}
+                      {claim.projectReference && `(${claim.projectReference})`} ·{' '}
+                      {claim.manufacturer}
+                      {claim.externalReference ? ` · their ref ${claim.externalReference}` : ''}
+                    </div>
+                    <div className="xs dim">{claim.faultDescription}</div>
+                    {claim.decisionNotes && (
+                      <div className="xs" style={{ marginTop: 2 }}>
+                        {claim.decisionNotes}
+                      </div>
+                    )}
+                  </div>
+                  {claim.status !== 'closed' && (
+                    <Button variant="outline" size="sm" onClick={() => setProgressing(claim)}>
+                      Record progress
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
       <Card style={{ marginTop: 'var(--space-6)' }}>
         <CardBody>
           <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -232,6 +324,85 @@ export function AssetRegistryPage() {
           </div>
         </CardBody>
       </Card>
+
+      {/* ------------------------------------------ PROGRESS A CLAIM */}
+      <Modal
+        open={progressing !== null}
+        onClose={() => {
+          setProgressing(null)
+          updateRma.reset()
+        }}
+        title={progressing ? `Claim ${progressing.reference}` : 'Claim'}
+      >
+        {progressing && (
+          <form
+            className="stack"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const form = new FormData(event.currentTarget)
+              updateRma.mutate(
+                {
+                  id: progressing.id,
+                  status: String(form.get('status')) as RmaStatus,
+                  externalReference: String(form.get('reference') ?? ''),
+                  decisionNotes: String(form.get('notes') ?? ''),
+                },
+                { onSuccess: () => setProgressing(null) },
+              )
+            }}
+          >
+            <div className="field">
+              <label className="field__label" htmlFor="rma-status">
+                Where it stands
+              </label>
+              <select
+                id="rma-status"
+                name="status"
+                className="select"
+                defaultValue={progressing.status}
+              >
+                {(Object.keys(RMA_STATUS_LABEL) as RmaStatus[]).map((status) => (
+                  <option key={status} value={status}>
+                    {RMA_STATUS_LABEL[status]}
+                  </option>
+                ))}
+              </select>
+              <span className="field__hint">
+                &ldquo;Replacement received&rdquo; marks the original unit as replaced in the
+                registry. Scan the new unit&apos;s serial from the field app when it is fitted.
+              </span>
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor="rma-ref">
+                Manufacturer&apos;s reference
+              </label>
+              <input
+                id="rma-ref"
+                name="reference"
+                className="input"
+                defaultValue={progressing.externalReference ?? ''}
+                placeholder="Their case or RMA number"
+              />
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor="rma-notes">
+                Their decision, or what happened
+              </label>
+              <textarea
+                id="rma-notes"
+                name="notes"
+                className="textarea"
+                rows={3}
+                defaultValue={progressing.decisionNotes ?? ''}
+              />
+            </div>
+            <FormError error={updateRma.error} />
+            <Button type="submit" variant="primary" block disabled={updateRma.isPending}>
+              {updateRma.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </form>
+        )}
+      </Modal>
 
       {/* ------------------------------------------------- FILE AN RMA */}
       <Modal

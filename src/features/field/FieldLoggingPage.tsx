@@ -5,9 +5,17 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { FormError } from '@/components/ui/FormError'
 import { Tabs } from '@/components/ui/Tabs'
-import { useLogMaterials, useMyJobs, useProjectSerials, useScanSerial } from '@/lib/queries/field'
+import {
+  useJobMaterials,
+  useLogMaterials,
+  useMyJobs,
+  useProjectSerials,
+  useScanSerial,
+} from '@/lib/queries/field'
 import { useStock } from '@/lib/queries/inventory-finance'
+import { useCompany } from '@/lib/queries/public-site'
 import { useProjectPhotoCategories, useUploadSitePhoto } from '@/lib/queries/storage'
+import type { StockItem } from '@/types/domain'
 
 /* ============================================================================
    FieldLoggingPage — Media & Hardware Logging.
@@ -90,6 +98,43 @@ export function FieldLoggingPage() {
   const [serialItemId, setSerialItemId] = useState('')
   const capturedCategories = useProjectPhotoCategories(activeJob?.projectId).data ?? []
 
+  /* What this job is meant to use — its bill of materials as the warehouse
+     holds it. Materials are logged against these, and anything else the crew
+     had to use can be added from the catalogue below. */
+  const materials = useJobMaterials(activeJob?.projectId).data ?? []
+  const [extraItemId, setExtraItemId] = useState('')
+  const [extraLines, setExtraLines] = useState<string[]>([])
+
+  /* Only equipment that carries a serial is worth a serial. The list used to
+     offer every catalogue line — mid clamps and metres of cable included —
+     so a panel serial could be filed against a roll of wire. Items on this
+     job's bill of materials come first. */
+  const onThisJob = new Set(materials.filter((m) => m.isSerialised).map((m) => m.stockItemId))
+  const serialisable = STOCK.filter((s) => s.isSerialised).sort(
+    (a, b) => Number(onThisJob.has(b.id)) - Number(onThisJob.has(a.id)),
+  )
+  const serialsExpected = materials
+    .filter((m) => m.isSerialised)
+    .reduce((sum, m) => sum + m.planned, 0)
+
+  /* The warranty term comes from the equipment, and the company's published
+     terms — not a flat ten years for everything, which promised an inverter
+     double the warranty it actually carries. */
+  const company = useCompany()
+  function warrantyYearsFor(item: StockItem | undefined): number {
+    switch (item?.category) {
+      case 'panel':
+        return company.warrantyPanelYears
+      case 'inverter':
+      case 'charge_controller':
+        return company.warrantyInverterYears
+      case 'battery':
+        return company.warrantyBatteryYears
+      default:
+        return company.warrantyWorkmanshipYears
+    }
+  }
+
   function addSerial(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = scanInput.trim()
@@ -104,11 +149,16 @@ export function FieldLoggingPage() {
         stockItemId: serialItem?.id,
         projectId: activeJob.projectId,
         clientId: activeJob.clientId,
+        warrantyYears: warrantyYearsFor(serialItem),
       },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           setScanInput('')
-          setLogged(`Serial ${trimmed.toUpperCase()} recorded`)
+          setLogged(
+            result?.queued
+              ? `Serial ${trimmed.toUpperCase()} saved on this phone — it will sync when you have signal`
+              : `Serial ${trimmed.toUpperCase()} recorded`,
+          )
         },
       },
     )
@@ -129,6 +179,7 @@ export function FieldLoggingPage() {
       })
     }
     setQuantities({})
+    setExtraLines([])
     setLogged(`${entries.length} material line(s) logged`)
   }
 
@@ -313,8 +364,9 @@ export function FieldLoggingPage() {
                 })}
               </div>
               <p className="xs dim" style={{ marginTop: 'var(--space-3)' }}>
-                {capturedCategories.length} of {PHOTO_CATEGORIES.length} taken. All are required
-                before the job can be marked complete — they form the engineering inspection record.
+                {capturedCategories.length} of {PHOTO_CATEGORIES.length} taken. Take all of them
+                before you leave site — together they are the engineering inspection record, and the
+                customer sees them in their project tracker.
               </p>
             </CardBody>
           </Card>
@@ -343,10 +395,11 @@ export function FieldLoggingPage() {
                     value={serialItemId}
                     onChange={(e) => setSerialItemId(e.target.value)}
                   >
-                    <option value="">Choose from the catalogue…</option>
-                    {STOCK.map((item) => (
+                    <option value="">Choose the equipment…</option>
+                    {serialisable.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
+                        {onThisJob.has(item.id) ? ' · on this job' : ''}
                       </option>
                     ))}
                   </select>
@@ -380,8 +433,16 @@ export function FieldLoggingPage() {
           <Card>
             <CardBody>
               <div className="row row--between" style={{ marginBottom: 'var(--space-3)' }}>
-                <h3 style={{ fontSize: 'var(--text-base)' }}>Scanned this job</h3>
-                <Badge tone="brand">{serials.length} recorded</Badge>
+                <h3 style={{ fontSize: 'var(--text-base)' }}>Recorded on this job</h3>
+                <Badge
+                  tone={
+                    serialsExpected > 0 && serials.length >= serialsExpected ? 'success' : 'brand'
+                  }
+                >
+                  {serialsExpected > 0
+                    ? `${serials.length} of ${serialsExpected}`
+                    : `${serials.length} recorded`}
+                </Badge>
               </div>
 
               <div className="stack stack--sm">
@@ -427,42 +488,103 @@ export function FieldLoggingPage() {
               </h3>
               <p className="xs dim" style={{ marginBottom: 'var(--space-4)' }}>
                 Record what was actually used. This deducts from warehouse stock, so accuracy here
-                keeps the inventory numbers honest.
+                keeps the inventory numbers honest. The list is this job&apos;s bill of materials.
               </p>
 
+              {materials.length === 0 && (
+                <p className="small muted" style={{ marginBottom: 'var(--space-3)' }}>
+                  Nothing is reserved against this job yet. Add what you used from the catalogue
+                  below.
+                </p>
+              )}
+
               <div className="stack stack--sm">
-                {STOCK.slice(0, 5).map((item) => (
+                {[
+                  ...materials.map((m) => ({
+                    id: m.stockItemId,
+                    name: m.name,
+                    detail: `${m.sku} · planned ${m.planned} ${m.unit}${
+                      m.used > 0 ? ` · ${m.used} already logged` : ''
+                    }`,
+                    unit: m.unit,
+                  })),
+                  ...extraLines
+                    .map((id) => STOCK.find((s) => s.id === id))
+                    .filter((item): item is StockItem => Boolean(item))
+                    .map((item) => ({
+                      id: item.id,
+                      name: item.name,
+                      detail: `${item.sku} · not on the bill of materials`,
+                      unit: item.unit,
+                    })),
+                ].map((line) => (
                   <div
-                    key={item.id}
+                    key={line.id}
                     style={{
                       padding: 'var(--space-3)',
                       border: '1px solid var(--border)',
                       borderRadius: 'var(--radius)',
                     }}
                   >
-                    <div className="small strong">{item.name}</div>
+                    <div className="small strong">{line.name}</div>
                     <div className="xs dim" style={{ marginBottom: 'var(--space-2)' }}>
-                      {item.sku}
+                      {line.detail}
                     </div>
                     <div className="row">
                       <input
                         className="input"
                         type="number"
                         min={0}
-                        value={quantities[item.id] ?? 0}
+                        value={quantities[line.id] ?? 0}
                         onChange={(e) =>
                           setQuantities((previous) => ({
                             ...previous,
-                            [item.id]: Number(e.target.value),
+                            [line.id]: Number(e.target.value),
                           }))
                         }
                         style={{ width: 90 }}
-                        aria-label={`Quantity used of ${item.name}`}
+                        aria-label={`Quantity used of ${line.name}`}
                       />
-                      <span className="small muted">units used</span>
+                      <span className="small muted">{line.unit} used</span>
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="field" style={{ marginTop: 'var(--space-4)' }}>
+                <label className="field__label" htmlFor="extraItem">
+                  Used something else?
+                </label>
+                <div className="row" style={{ gap: 'var(--space-2)' }}>
+                  <select
+                    id="extraItem"
+                    className="select"
+                    value={extraItemId}
+                    onChange={(e) => setExtraItemId(e.target.value)}
+                  >
+                    <option value="">Choose from the catalogue…</option>
+                    {STOCK.filter(
+                      (item) =>
+                        !materials.some((m) => m.stockItemId === item.id) &&
+                        !extraLines.includes(item.id),
+                    ).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!extraItemId}
+                    onClick={() => {
+                      setExtraLines((previous) => [...previous, extraItemId])
+                      setExtraItemId('')
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
               </div>
 
               <Button
@@ -486,9 +608,10 @@ export function FieldLoggingPage() {
           <div className="row" style={{ alignItems: 'flex-start' }}>
             <span>⟳</span>
             <p className="xs dim">
-              Everything logged here is saved to your phone first and uploaded when you reconnect.
-              You can work through a full installation with no signal at all and nothing will be
-              lost.
+              Serials and materials logged here are saved on your phone first and sent when you
+              reconnect, so you can work through an installation with no signal. Photos are the
+              exception: they are too large to hold on the phone, so take them once you have signal
+              — the checklist above shows which are still missing.
             </p>
           </div>
         </CardBody>

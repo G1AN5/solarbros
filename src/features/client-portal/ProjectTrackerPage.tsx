@@ -10,8 +10,10 @@ import {
   PROJECT_STATUS_TONE,
   SYSTEM_TYPE_LABEL,
 } from '@/lib/labels'
+import { PhotoGrid } from '@/components/ui/PhotoGrid'
 import { QueryState } from '@/components/ui/QueryState'
 import { useMyProject } from '@/lib/queries/client-portal'
+import { useProjectCrew, useStaffNames } from '@/lib/queries/operations'
 
 /* ============================================================================
    ProjectTrackerPage — the customer's live installation timeline.
@@ -30,6 +32,10 @@ import { useMyProject } from '@/lib/queries/client-portal'
 export function ProjectTrackerPage() {
   const projectQuery = useMyProject()
   const project = projectQuery.data
+  /* The crew, by name. A customer cannot read staff profiles, so the names
+     come from the staff-names function rather than a join. */
+  const crew = useProjectCrew(project?.id).data ?? []
+  const crewNames = useStaffNames(crew.map((member) => member.userId)).data ?? {}
 
   // The tracker IS the project, so there is nothing to show without it.
   if (projectQuery.isLoading || projectQuery.error || !project) {
@@ -109,21 +115,15 @@ export function ProjectTrackerPage() {
             <CardHeader title="Installation address" />
             <CardBody>
               <p>{project.address}</p>
-              <div
-                style={{
-                  marginTop: 'var(--space-4)',
-                  height: 160,
-                  background:
-                    'repeating-linear-gradient(45deg, var(--ink-100), var(--ink-100) 12px, var(--ink-200) 12px, var(--ink-200) 24px)',
-                  borderRadius: 'var(--radius)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  color: 'var(--text-muted)',
-                  fontSize: 'var(--text-sm)',
-                }}
+              <a
+                className="btn btn--outline btn--sm"
+                style={{ marginTop: 'var(--space-3)' }}
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(project.address)}`}
+                target="_blank"
+                rel="noreferrer"
               >
-                🗺️ Site location map
-              </div>
+                Open in Google Maps
+              </a>
             </CardBody>
           </Card>
 
@@ -132,19 +132,33 @@ export function ProjectTrackerPage() {
             <CardBody>
               <div className="stack stack--sm">
                 <div className="row">
-                  <span className="avatar">PC</span>
+                  <span className="avatar">{initials(project.assignedEngineer)}</span>
                   <div>
                     <div className="small strong">{project.assignedEngineer}</div>
-                    <div className="xs dim">Project Engineer · your main contact</div>
+                    <div className="xs dim">Project engineer · your main contact</div>
                   </div>
                 </div>
-                <div className="row">
-                  <span className="avatar">RD</span>
-                  <div>
-                    <div className="small strong">Ramon Dizon</div>
-                    <div className="xs dim">Lead Installation Technician</div>
-                  </div>
-                </div>
+                {crew.map((member) => {
+                  const name = crewNames[member.userId] ?? 'Crew member'
+                  return (
+                    <div key={member.userId} className="row">
+                      <span className="avatar">{initials(name)}</span>
+                      <div>
+                        <div className="small strong">{name}</div>
+                        <div className="xs dim">
+                          {member.crewRole === 'lead'
+                            ? 'Lead installer'
+                            : member.crewRole.charAt(0).toUpperCase() + member.crewRole.slice(1)}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                {crew.length === 0 && (
+                  <p className="xs dim">
+                    Your installation crew is listed here once they are scheduled.
+                  </p>
+                )}
               </div>
             </CardBody>
           </Card>
@@ -153,7 +167,7 @@ export function ProjectTrackerPage() {
             <CardHeader title="Contract value" />
             <CardBody>
               <Progress
-                value={project.amountPaid / project.contractValue}
+                value={project.contractValue > 0 ? project.amountPaid / project.contractValue : 0}
                 label={`${currency(project.amountPaid)} of ${currency(project.contractValue)}`}
                 tone="success"
               />
@@ -166,32 +180,25 @@ export function ProjectTrackerPage() {
         </div>
       </div>
 
-      {/* Site photos uploaded by technicians via the field portal. */}
+      {/* Site photos uploaded by the crew from the field app. */}
       <Card style={{ marginTop: 'var(--space-6)' }}>
         <CardHeader
           title="Site photos"
-          action={<span className="small dim">Uploaded by our field team</span>}
+          action={<span className="small dim">Taken by our field team</span>}
         />
         <CardBody>
-          <div className="grid" style={{ '--col-min': '160px' } as React.CSSProperties}>
-            {['Roof survey', 'Racking installed', 'Panels mounted', 'DC combiner box'].map(
-              (label) => (
-                <div key={label}>
-                  <div
-                    className="portfolio-item__media"
-                    style={{ height: 120, borderRadius: 'var(--radius)' }}
-                  >
-                    Photo
-                  </div>
-                  <div className="xs dim" style={{ marginTop: 'var(--space-2)' }}>
-                    {label}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
+          <PhotoGrid projectId={project.id} />
         </CardBody>
       </Card>
     </>
   )
+}
+
+/** "Engineer Name" → "EN", for the avatar circle. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return (
+    (parts[0][0] ?? '') + (parts.length > 1 ? (parts[parts.length - 1][0] ?? '') : '')
+  ).toUpperCase()
 }

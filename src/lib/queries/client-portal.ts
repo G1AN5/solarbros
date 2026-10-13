@@ -176,7 +176,8 @@ export function useRequestAppointment() {
       address?: string
       notes?: string
     }) => {
-      if (!supabase) return
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      if (!input.date) throw new Error('Choose a date for the visit.')
 
       const { error } = await supabase.from('appointments').insert({
         appointment_type: input.type,
@@ -352,6 +353,19 @@ export function useRaiseTicket() {
    NOTIFICATIONS
    ========================================================================== */
 
+/**
+ * The signed-in person's own in-app notifications — customers, staff and
+ * technicians alike.
+ *
+ * FILTERED BY USER, NOT LEFT TO RLS. For most people the policy alone would
+ * return only their rows, but an administrator may read EVERY notification
+ * (that is what the outbox is for) — so without the filter an administrator's
+ * bell listed every customer's messages, and "mark all read" marked all of
+ * them read for everybody.
+ *
+ * Only in-app rows: the email and SMS copies of the same message belong to the
+ * outbox, not to a bell.
+ */
 export function useMyNotifications() {
   const { user } = useAuth()
 
@@ -359,12 +373,16 @@ export function useMyNotifications() {
     queryKey: clientKeys.notifications(user?.id),
     enabled: Boolean(user),
     staleTime: 15_000,
+    // A bell nobody has to reload to see change.
+    refetchInterval: 60_000,
     queryFn: async () => {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
+        .eq('user_id', user!.id)
+        .eq('channel', 'in_app')
         .order('created_at', { ascending: false })
         .limit(50)
 
@@ -379,13 +397,15 @@ export function useMarkNotificationsRead() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async () => {
-      if (!supabase) return
-      // RLS restricts this to the caller's own rows, so no id filter is needed.
-      const { error } = await supabase
+    mutationFn: async (input?: { id?: string }) => {
+      if (!supabase || !user) return
+      let query = supabase
         .from('notifications')
         .update({ read: true })
+        .eq('user_id', user.id)
         .eq('read', false)
+      if (input?.id) query = query.eq('id', input.id)
+      const { error } = await query
       if (error) throwReadable(error)
     },
     onSuccess: () => {
@@ -613,6 +633,99 @@ export function useRequestUpgrade() {
     onSuccess: () => {
       // It lands on the CRM board beside brand-new prospects.
       void queryClient.invalidateQueries({ queryKey: ['crm'] })
+    },
+  })
+}
+
+/* ============================================================================
+   THE CUSTOMER'S VERDICT
+   ----------------------------------------------------------------------------
+   Two kinds: a star rating on a resolved support ticket, and a review of the
+   installation once it is complete. Neither had a way in — the ticket column
+   and the reviews table existed, and the only reviews on the public site were
+   the ones typed in by staff. A review goes to the content team to approve
+   before it is published; the customer's own words, never edited.
+   ========================================================================== */
+
+export function useRateTicket() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { ticketId: string; rating: number }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { error } = await supabase.rpc('rate_ticket', {
+        p_ticket_id: input.ticketId,
+        p_rating: input.rating,
+      })
+      if (error) throwReadable(error)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['client'] })
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+    },
+  })
+}
+
+export function useMyReviews() {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: ['client', 'reviews', user?.id ?? 'none'],
+    enabled: Boolean(user),
+    queryFn: async () => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('id, project_id, rating, status, published, created_at')
+        .eq('client_id', user!.id)
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        projectId: row.project_id,
+        rating: row.rating,
+        status: row.status,
+        published: row.published,
+        createdAt: row.created_at,
+      }))
+    },
+  })
+}
+
+export function useSubmitReview() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      projectId: string
+      rating: number
+      quote: string
+      displayName: string
+      displayLocation?: string
+      systemSummary?: string
+    }) => {
+      if (!supabase || !user) throw new Error(NOT_CONNECTED)
+      if (input.rating < 1 || input.rating > 5)
+        throw new Error('Choose between one and five stars.')
+      if (input.quote.trim().length < 10)
+        throw new Error('Tell us a little more — a sentence or two.')
+
+      const { error } = await supabase.from('reviews').insert({
+        client_id: user.id,
+        project_id: input.projectId,
+        rating: input.rating,
+        quote: input.quote.trim(),
+        display_name: input.displayName.trim() || user.fullName,
+        display_location: input.displayLocation?.trim() || null,
+        system_summary: input.systemSummary ?? null,
+        status: 'pending',
+        published: false,
+      })
+      if (error) throwReadable(error)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['client', 'reviews'] })
+      void queryClient.invalidateQueries({ queryKey: ['content', 'reviews'] })
     },
   })
 }

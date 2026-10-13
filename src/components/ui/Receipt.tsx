@@ -75,7 +75,7 @@ export function Receipt({ open, onClose, receipt }: ReceiptProps) {
             <div className="receipt__company">{receipt.company.name}</div>
             <div className="receipt__meta">{receipt.company.address}</div>
             <div className="receipt__meta">
-              {receipt.company.phone} · {receipt.company.email}
+              {[receipt.company.phone, receipt.company.email].filter(Boolean).join(' · ')}
             </div>
           </div>
           <div className="receipt__stamp">

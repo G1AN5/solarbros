@@ -108,7 +108,7 @@ export function PublicLayout() {
               <p className="small" style={{ marginTop: 'var(--space-3)', color: 'var(--ink-400)' }}>
                 {COMPANY.address}
                 <br />
-                {COMPANY.phone} · {COMPANY.email}
+                {[COMPANY.phone, COMPANY.email].filter(Boolean).join(' · ')}
                 <br />
                 {COMPANY.hours}
               </p>

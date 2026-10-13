@@ -85,7 +85,9 @@ export function toProject(row: ProjectRow, milestones: MilestoneRow[] = []): Pro
     systemType: row.system_type,
     contractValue: num(row.contract_value),
     amountPaid: num(row.amount_paid),
-    status: row.status === 'cancelled' ? 'on_hold' : row.status,
+    /* A cancelled project used to be shown as "On hold" — to the customer
+       too — which promised a resumption nobody intended. */
+    status: row.status,
     milestones: [...milestones].sort((a, b) => a.sequence - b.sequence).map(toMilestone),
     /* NEVER fall back to the raw column here. `assigned_engineer` is a uuid,
        so a caller that forgot to join profiles used to render
@@ -95,10 +97,28 @@ export function toProject(row: ProjectRow, milestones: MilestoneRow[] = []): Pro
     assignedEngineer: 'To be assigned',
     startDate: iso(row.start_date),
     targetTurnover: iso(row.target_turnover),
+    assignedEngineerId: row.assigned_engineer,
+    actualTurnover: row.actual_turnover,
   }
 }
 
+/** Today as YYYY-MM-DD in the browser's timezone, to compare with date columns. */
+function todayIso(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 export function toInvoice(row: InvoiceRow, clientName = ''): Invoice {
+  /* An invoice past its due date is overdue the moment the date passes, not
+     the next time somebody records a payment against it — which is when the
+     database used to notice. The daily housekeeping job (0073) now writes it
+     back too; this keeps the screen right in the hours in between. */
+  const pastDue =
+    row.status === 'sent' &&
+    row.due_at !== null &&
+    row.due_at < todayIso() &&
+    num(row.amount_paid) < num(row.amount)
+
   return {
     id: row.id,
     number: row.invoice_number,
@@ -110,7 +130,8 @@ export function toInvoice(row: InvoiceRow, clientName = ''): Invoice {
     amountPaid: num(row.amount_paid),
     // `void` exists in the database but not in the UI's status union, because
     // no screen renders it differently from a draft.
-    status: row.status === 'void' ? 'draft' : row.status,
+    status: row.status === 'void' ? 'draft' : pastDue ? 'overdue' : row.status,
+    notes: row.notes ?? undefined,
     issuedAt: iso(row.issued_at),
     dueAt: iso(row.due_at),
   }
@@ -120,8 +141,10 @@ export function toAppointment(row: AppointmentRow, assignedTo: string[] = []): A
   return {
     id: row.id,
     type: row.appointment_type,
-    // 'in_progress' is a field-portal state the shared UI treats as dispatched.
-    status: row.status === 'in_progress' ? 'dispatched' : row.status,
+    /* Passed through. 'in_progress' used to be shown as "dispatched", so the
+       office and the customer could not tell a crew on site from one that
+       had not set off. */
+    status: row.status,
     date: row.scheduled_date,
     timeSlot: row.time_slot,
     clientName: row.contact_name,
@@ -131,6 +154,12 @@ export function toAppointment(row: AppointmentRow, assignedTo: string[] = []): A
     notes: row.notes ?? undefined,
     projectId: row.project_id ?? undefined,
     clientId: row.client_id ?? undefined,
+    leadId: row.lead_id ?? undefined,
+    ticketId: row.ticket_id ?? undefined,
+    cancelledReason: row.cancelled_reason ?? undefined,
+    completedAt: row.completed_at ?? undefined,
+    signoffName: row.client_signoff_name ?? undefined,
+    createdAt: row.created_at,
   }
 }
 
@@ -153,6 +182,8 @@ export function toTicket(row: TicketRow, clientName = ''): Ticket {
     assignedToId: row.assigned_to ?? undefined,
     resolution: row.resolution ?? undefined,
     resolvedAt: row.resolved_at ?? undefined,
+    warrantyCovered: row.warranty_covered,
+    satisfactionRating: row.satisfaction_rating,
   }
 }
 
@@ -160,12 +191,11 @@ export function toDocument(row: DocumentRow): StoredDocument {
   return {
     id: row.id,
     name: row.name,
-    kind:
-      row.kind === 'survey_report' || row.kind === 'as_built' || row.kind === 'proof_of_sale'
-        ? 'inspection_report'
-        : row.kind === 'other'
-          ? 'quotation'
-          : row.kind,
+    /* Passed through as stored. A customer's own upload ('other') used to be
+       relabelled "Quotation" in their vault, and a proof of sale an
+       "Inspection report" — the mapper was squeezing the database's kinds
+       into the UI's shorter list instead of the list growing to fit them. */
+    kind: row.kind,
     projectId: row.project_id ?? '',
     sizeKb: row.size_kb ?? 0,
     uploadedAt: row.uploaded_at,
@@ -183,6 +213,7 @@ export function toAsset(row: AssetRow): SerializedAsset {
     installedAt: iso(row.installed_at),
     warrantyYears: row.warranty_years,
     warrantyExpiresAt: iso(row.warranty_expires_at),
+    status: row.status,
   }
 }
 
@@ -194,5 +225,8 @@ export function toNotification(row: NotificationRow): AppNotification {
     channel: row.channel,
     read: row.read,
     at: row.created_at,
+    category: row.category,
+    entity: row.entity ?? undefined,
+    entityId: row.entity_id ?? undefined,
   }
 }

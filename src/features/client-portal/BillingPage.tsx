@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
+import { FormError } from '@/components/ui/FormError'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Progress } from '@/components/ui/Progress'
 import { StatTile } from '@/components/ui/StatTile'
@@ -12,10 +13,13 @@ import { INVOICE_STATUS_TONE, PAYMENT_STAGE_LABEL } from '@/lib/labels'
 import { QueryState } from '@/components/ui/QueryState'
 import { datedFilename, downloadCsv } from '@/lib/csv'
 import { Receipt, type ReceiptData } from '@/components/ui/Receipt'
+import { useAuth } from '@/app/auth/useAuth'
 import { useMyInvoices, useMyProject } from '@/lib/queries/client-portal'
 import { useInvoicePayments, useRefunds } from '@/lib/queries/payments'
 import { useCompany } from '@/lib/queries/public-site'
+import { useMyContracts } from '@/lib/queries/sales'
 import { usePaymentDetails } from '@/lib/queries/settings'
+import { useClientUpload } from '@/lib/queries/storage'
 import type { Invoice } from '@/types/domain'
 
 /* ============================================================================
@@ -37,14 +41,47 @@ import type { Invoice } from '@/types/domain'
 
    The balance moves when the office records the transfer against the invoice,
    which is the honest representation: the money is not ours until somebody has
-   seen it on a statement.
+   seen it on a statement. To get there sooner, the customer can upload the
+   deposit slip or screenshot here; it goes straight to the finance team.
    ========================================================================== */
 
 export function BillingPage() {
+  const { user } = useAuth()
   const projectQuery = useMyProject()
   const invoicesQuery = useMyInvoices()
   const project = projectQuery.data
   const invoices = invoicesQuery.data ?? []
+
+  /* The schedule is the one in the customer's own contract. It was typed in as
+     50/35/15, so a contract signed on any other split showed the wrong amounts
+     beside the right invoices. */
+  const contracts = useMyContracts(user?.id).data ?? []
+  const contract = contracts.find((c) => c.status === 'executed')
+
+  /* PROOF OF PAYMENT. Named after the invoice it pays, so the accountant can
+     see at a glance which one to record it against. */
+  const upload = useClientUpload()
+  const proofInput = useRef<HTMLInputElement>(null)
+  const [proofFor, setProofFor] = useState<Invoice | null>(null)
+  const [proofSent, setProofSent] = useState<string | null>(null)
+
+  function chooseProof(invoice: Invoice) {
+    setProofFor(invoice)
+    setProofSent(null)
+    upload.reset()
+    proofInput.current?.click()
+  }
+
+  function sendProof(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !proofFor || !project) return
+    const named = new File([file], `${proofFor.number} - ${file.name}`, { type: file.type })
+    upload.mutate(
+      { file: named, projectId: project.id, kind: 'receipt' },
+      { onSuccess: () => setProofSent(proofFor.number) },
+    )
+  }
 
   const bank = usePaymentDetails()
   /* Money going back is the last thing that should be invisible to the person
@@ -149,21 +186,29 @@ export function BillingPage() {
     {
       header: '',
       cell: (inv) => {
-        if (inv.status === 'paid') {
-          return (
-            <Button variant="ghost" size="sm" onClick={() => setReceiptInvoice(inv)}>
-              Receipt
-            </Button>
-          )
-        }
-
-        /* No button, because there is nothing for one to do — the customer
-           pays from their own banking app. Saying HOW rather than offering a
-           control that cannot work is the honest version of this cell. */
+        /* A receipt for whatever has been received — a part payment too —
+           and, while anything is owed, a way to send the proof of payment. */
         return (
-          <span className="xs dim" title="Bank details are below">
-            Transfer {currency(inv.amount - inv.amountPaid)}
-          </span>
+          <div className="row row--wrap" style={{ gap: 4 }}>
+            {inv.amountPaid > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setReceiptInvoice(inv)}>
+                Receipt
+              </Button>
+            )}
+            {inv.amount > inv.amountPaid && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={upload.isPending}
+                onClick={() => chooseProof(inv)}
+                title={`Pay ${currency(inv.amount - inv.amountPaid)} by transfer, then upload the slip`}
+              >
+                {upload.isPending && proofFor?.id === inv.id
+                  ? 'Uploading…'
+                  : 'I have paid — upload proof'}
+              </Button>
+            )}
+          </div>
         )
       },
     },
@@ -217,7 +262,11 @@ export function BillingPage() {
         />
         <StatTile
           label="Payment progress"
-          value={`${Math.round((project.amountPaid / project.contractValue) * 100)}%`}
+          value={`${
+            project.contractValue > 0
+              ? Math.round((project.amountPaid / project.contractValue) * 100)
+              : 0
+          }%`}
         />
       </div>
 
@@ -226,7 +275,7 @@ export function BillingPage() {
         <CardHeader title="Payment schedule" />
         <CardBody>
           <Progress
-            value={project.amountPaid / project.contractValue}
+            value={project.contractValue > 0 ? project.amountPaid / project.contractValue : 0}
             label={`${currency(project.amountPaid)} of ${currency(project.contractValue)} collected`}
             tone="success"
           />
@@ -234,9 +283,21 @@ export function BillingPage() {
           <div className="grid" style={{ marginTop: 'var(--space-6)' }}>
             {(
               [
-                { stage: 'down_payment', pct: 50, trigger: 'On contract signing' },
-                { stage: 'delivery', pct: 35, trigger: 'When equipment arrives on site' },
-                { stage: 'commissioning', pct: 15, trigger: 'After successful turnover' },
+                {
+                  stage: 'down_payment',
+                  pct: contract?.downPaymentPct ?? 50,
+                  trigger: 'When your contract is counter-signed',
+                },
+                {
+                  stage: 'delivery',
+                  pct: contract?.deliveryPct ?? 35,
+                  trigger: 'When the equipment is installed and wired',
+                },
+                {
+                  stage: 'commissioning',
+                  pct: contract?.commissioningPct ?? 15,
+                  trigger: 'After successful turnover',
+                },
               ] as const
             ).map((row) => {
               const invoice = invoices.find((i) => i.stage === row.stage)
@@ -271,7 +332,36 @@ export function BillingPage() {
       <Card>
         <CardHeader title="Invoice history" />
         <CardBody>
-          <DataTable columns={columns} rows={invoices} rowKey={(inv) => inv.id} />
+          <input
+            ref={proofInput}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={sendProof}
+            style={{ display: 'none' }}
+          />
+          {proofSent && (
+            <p
+              className="small"
+              style={{
+                marginBottom: 'var(--space-4)',
+                padding: 'var(--space-3)',
+                background: 'var(--success-bg)',
+                color: 'var(--success-fg)',
+                borderRadius: 'var(--radius)',
+              }}
+            >
+              Thank you — your proof of payment for {proofSent} is with our finance team. Your
+              balance updates once they have matched it to our bank statement, and you are notified
+              when it does.
+            </p>
+          )}
+          <FormError error={upload.error} />
+          <DataTable
+            columns={columns}
+            rows={invoices}
+            rowKey={(inv) => inv.id}
+            emptyMessage="No invoices yet. The down payment is invoiced once we counter-sign your contract."
+          />
         </CardBody>
       </Card>
 
@@ -365,17 +455,20 @@ export function BillingPage() {
               </p>
 
               <p className="xs dim" style={{ marginTop: 'var(--space-3)' }}>
-                Your balance above updates once we have matched your transfer against our bank
-                statement — usually the next working day. Nothing is lost in between; the reference
-                on your transfer is what we match it by.
+                After paying, press &ldquo;I have paid — upload proof&rdquo; beside the invoice and
+                attach the slip or screenshot. Your balance updates once we have matched it against
+                our bank statement — usually the next working day.
               </p>
             </>
           ) : (
             /* Better to say nothing than to show a customer an empty account
                number and let them guess at it. */
             <p className="small muted">
-              Please contact the office for payment details. We will confirm where to send your
-              payment and the reference to quote.
+              Please contact the office for payment details
+              {company.phone ? ` on ${company.phone}` : ''}
+              {company.email ? ` or ${company.email}` : ''}. We will confirm where to send your
+              payment and the reference to quote — then upload your proof of payment beside the
+              invoice above.
             </p>
           )}
         </CardBody>

@@ -1,9 +1,12 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
+import { DownloadButton } from '@/components/ui/DownloadButton'
 import { FormError } from '@/components/ui/FormError'
 import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -20,11 +23,15 @@ import {
 } from '@/lib/queries/inventory-finance'
 import { useProjects } from '@/lib/queries/operations'
 import {
+  refreshTimeBasedStatuses,
+  useCommissions,
   useConfirmRefund,
   useInvoicePayments,
+  usePaymentProofs,
   usePaymentsAwaitingVerification,
   useRecordRefund,
   useRefunds,
+  useSetCommissionStatus,
   useVerifyPayment,
 } from '@/lib/queries/payments'
 import { useCompany } from '@/lib/queries/public-site'
@@ -45,7 +52,11 @@ import { datedFilename, downloadCsv } from '@/lib/csv'
    work that has not happened, because the milestone is what raises it.
 
    The ageing table below is the collections view — how overdue, and by how
-   much. Anything past 30 days should be escalated.
+   much. Anything past the escalation period in Settings is flagged.
+
+   ALSO HERE: proofs of payment the customers upload from their billing page,
+   to be matched to the bank statement and recorded; and sales commissions,
+   raised automatically at contract execution and released from here.
    ========================================================================== */
 
 /** Days between the due date and today. Negative means not yet due. */
@@ -58,7 +69,23 @@ export function FinancePage() {
   const invoices = invoicesQuery.data ?? []
 
   const settings = useSettings().data
-  const dualControlThreshold = settingNum(settings, 'finance.dual_control_threshold', 50000)
+  const dualControlThreshold = settingNum(settings, 'finance.dual_control_threshold', 0)
+  const escalationDays = settingNum(settings, 'finance.collections_escalation_days', 30)
+
+  /* Statuses that change with the calendar — overdue invoices, expired
+     quotations — are brought up to date when this page opens, in case the
+     nightly job has not run. */
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    void refreshTimeBasedStatuses().then((ran) => {
+      if (ran) void queryClient.invalidateQueries({ queryKey: ['fin'] })
+    })
+  }, [queryClient])
+
+  const proofs = usePaymentProofs().data ?? []
+  const commissions = useCommissions().data ?? []
+  const setCommission = useSetCommissionStatus()
+  const pendingCommissions = commissions.filter((c) => c.status === 'pending')
 
   const pendingQuery = usePaymentsAwaitingVerification()
   const pending = pendingQuery.data ?? []
@@ -324,7 +351,11 @@ export function FinancePage() {
         <StatTile
           label="Collected"
           value={currencyCompact(totalCollected)}
-          delta={`${Math.round((totalCollected / totalInvoiced) * 100)}% of invoiced`}
+          delta={
+            totalInvoiced > 0
+              ? `${Math.round((totalCollected / totalInvoiced) * 100)}% of invoiced`
+              : undefined
+          }
           direction="up"
         />
         <StatTile label="Outstanding" value={currencyCompact(outstanding)} />
@@ -440,6 +471,7 @@ export function FinancePage() {
                       {currency(invoice.amount - invoice.amountPaid)}
                     </span>
                     <Badge tone="danger">{daysOverdue(invoice)} days</Badge>
+                    {daysOverdue(invoice) > escalationDays && <Badge tone="danger">Escalate</Badge>}
                   </div>
                 </div>
               ))}
@@ -448,12 +480,60 @@ export function FinancePage() {
         </Card>
       )}
 
+      {/* ------------------------------------ PROOFS FROM CUSTOMERS */}
+      {proofs.length > 0 && (
+        <Card style={{ marginBottom: 'var(--space-6)' }}>
+          <CardHeader
+            title="Proofs of payment from customers"
+            action={<span className="xs dim">Uploaded from their billing page</span>}
+          />
+          <CardBody>
+            <p className="small muted" style={{ marginBottom: 'var(--space-4)' }}>
+              Check each one against the bank statement, then record the payment on the invoice it
+              pays. The customer is notified when it is recorded.
+            </p>
+            <div className="stack stack--sm">
+              {proofs.map((proof) => {
+                const unpaid = invoices.find(
+                  (i) => i.projectId === proof.projectId && i.amount > i.amountPaid,
+                )
+                return (
+                  <div key={proof.id} className="row row--between row--wrap">
+                    <div>
+                      <span className="strong small">{proof.clientName}</span>
+                      <span className="xs dim" style={{ display: 'block' }}>
+                        {proof.projectReference} · {proof.name} · {date(proof.uploadedAt)}
+                      </span>
+                    </div>
+                    <div className="row" style={{ gap: 'var(--space-2)' }}>
+                      <DownloadButton storagePath={proof.storagePath ?? undefined} />
+                      {unpaid ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPayingInvoice(unpaid)}
+                        >
+                          Record against {unpaid.number}
+                        </Button>
+                      ) : (
+                        <span className="xs dim">Nothing outstanding</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       <QueryState
         isLoading={invoicesQuery.isLoading}
         error={invoicesQuery.error as Error | null}
-        emptyIcon="&#129534;"
+        isEmpty={invoices.length === 0}
+        emptyIcon="🧾"
         emptyTitle="No invoices yet"
-        emptyMessage="Invoices are raised automatically as project milestones complete."
+        emptyMessage="The down payment is invoiced when a contract is counter-signed; the later stages as their milestones complete."
       >
         <DataTable columns={columns} rows={invoices} rowKey={(i) => i.id} />
       </QueryState>
@@ -632,8 +712,9 @@ export function FinancePage() {
             <div style={{ fontSize: '1.75rem' }}>🧾</div>
             <h4 style={{ margin: 0 }}>{raised} raised</h4>
             <p className="small muted">
-              It is on the customer's billing page now, and they can pay it online if it is within
-              the gateway ceiling.
+              It is on the customer&apos;s billing page now, and they have been notified. They pay
+              by bank transfer and can upload their proof of payment from the portal — it appears at
+              the top of this page.
             </p>
             <Button variant="outline" block onClick={closeInvoiceModal}>
               Done
@@ -715,6 +796,111 @@ export function FinancePage() {
           </form>
         )}
       </Modal>
+
+      {/* -------------------------------------------- COMMISSIONS */}
+      <Card style={{ marginTop: 'var(--space-6)' }}>
+        <CardHeader
+          title="Sales commissions"
+          action={
+            <span className="xs dim">
+              {pendingCommissions.length} pending ·{' '}
+              {currency(pendingCommissions.reduce((sum, c) => sum + c.amount, 0))}
+            </span>
+          }
+        />
+        <CardBody>
+          {commissions.length === 0 ? (
+            <p className="small muted">
+              None yet. A commission is raised for the sales representative who owned the lead when
+              its contract is counter-signed, at the rate in Settings.
+            </p>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Representative</th>
+                    <th>Project</th>
+                    <th className="table__num">Amount</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {commissions.map((c) => (
+                    <tr key={c.id}>
+                      <td className="small strong">{c.repName}</td>
+                      <td className="small">
+                        <Link to={`/admin/projects/${c.projectId}`}>{c.projectReference}</Link>
+                        <div className="xs dim">
+                          {c.clientName} · project {humanize(c.projectStatus)}
+                        </div>
+                      </td>
+                      <td className="table__num">
+                        {currency(c.amount)}
+                        {c.ratePct !== null && <div className="xs dim">{c.ratePct}%</div>}
+                      </td>
+                      <td>
+                        <Badge
+                          tone={
+                            c.status === 'approved'
+                              ? 'success'
+                              : c.status === 'rejected'
+                                ? 'danger'
+                                : 'warning'
+                          }
+                        >
+                          {c.status === 'approved'
+                            ? `Released${c.releasedAt ? ` ${date(c.releasedAt)}` : ''}`
+                            : c.status === 'rejected'
+                              ? 'Not payable'
+                              : 'Pending'}
+                        </Badge>
+                      </td>
+                      <td>
+                        {c.status === 'pending' && (
+                          <div className="row" style={{ gap: 4 }}>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={setCommission.isPending}
+                              title={
+                                c.projectStatus === 'completed'
+                                  ? undefined
+                                  : 'Usually released once the project is completed'
+                              }
+                              onClick={() => setCommission.mutate({ id: c.id, status: 'approved' })}
+                            >
+                              Release
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={setCommission.isPending}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Mark the commission on ${c.projectReference} as not payable?`,
+                                  )
+                                ) {
+                                  setCommission.mutate({ id: c.id, status: 'rejected' })
+                                }
+                              }}
+                            >
+                              Not payable
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <FormError error={setCommission.error} />
+        </CardBody>
+      </Card>
 
       {/* ------------------------------ REFUNDS AWAITING A SECOND PERSON */}
       {awaitingRefundConfirmation.length > 0 && (

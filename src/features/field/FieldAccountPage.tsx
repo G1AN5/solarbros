@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { useAuth } from '@/app/auth/useAuth'
 import { useChangePassword, useMyTimeLogs, useOfflineQueue } from '@/lib/queries/field'
 import { useRaiseTicket } from '@/lib/queries/client-portal'
+import { useCompany } from '@/lib/queries/public-site'
 import { dateTime, relative } from '@/lib/format'
 import { ROLE_LABEL } from '@/lib/labels'
 
@@ -27,9 +28,11 @@ import { ROLE_LABEL } from '@/lib/labels'
 
 export function FieldAccountPage() {
   const { user, signOut } = useAuth()
-  const { queue, pending, isOnline, syncing, lastSync, sync } = useOfflineQueue()
+  const { queue, pending, failed, dismissFailed, isOnline, syncing, lastSync, sync } =
+    useOfflineQueue()
   const timeQuery = useMyTimeLogs()
   const time = timeQuery.data
+  const company = useCompany()
 
   /* Three buttons on this card did nothing at all. A technician cannot get to
      a desktop to change a password, has no other copy of the safety rules on
@@ -173,6 +176,34 @@ export function FieldAccountPage() {
             </div>
           )}
 
+          {/* What the server refused. Dropped from the queue so it cannot block
+              everything behind it — but shown here, with the reason, rather
+              than lost: the technician may need to redo it by hand. */}
+          {failed.length > 0 && (
+            <div
+              className="stack stack--sm"
+              style={{
+                marginTop: 'var(--space-4)',
+                padding: 'var(--space-3)',
+                background: 'var(--danger-bg)',
+                borderRadius: 'var(--radius)',
+              }}
+            >
+              <div className="xs strong" style={{ color: 'var(--danger-fg)' }}>
+                COULD NOT BE SAVED — CHECK THESE WITH THE OFFICE
+              </div>
+              {failed.map((item) => (
+                <div key={item.id} className="xs">
+                  <div className="strong">{item.label}</div>
+                  <div className="dim">{item.reason}</div>
+                </div>
+              ))}
+              <Button variant="ghost" size="sm" onClick={dismissFailed}>
+                I have dealt with these
+              </Button>
+            </div>
+          )}
+
           <Button
             variant="primary"
             block
@@ -214,13 +245,30 @@ export function FieldAccountPage() {
               </span>
             </div>
             <div className="row row--between small">
-              <span className="muted">Jobs logged</span>
+              <span className="muted">Jobs completed</span>
               <span className="strong num">{time?.jobsCompleted ?? 0}</span>
             </div>
           </div>
+          {time?.overtimeAlert && (
+            <p
+              className="xs"
+              style={{
+                marginTop: 'var(--space-3)',
+                padding: 'var(--space-2) var(--space-3)',
+                background: 'var(--warning-bg)',
+                color: 'var(--warning-fg)',
+                borderRadius: 'var(--radius-sm)',
+              }}
+            >
+              That is more than the company&apos;s {time.overtimeThreshold}-hour overtime limit for
+              the month. Sustained overtime on a roof is a safety problem — talk to your project
+              engineer.
+            </p>
+          )}
           <p className="xs dim" style={{ marginTop: 'var(--space-3)' }}>
-            Hours come from your job check-ins. Raise anything that looks wrong with the office
-            before the payroll cut-off.
+            Hours run from &ldquo;start the job&rdquo; to &ldquo;complete job&rdquo; on each visit;
+            anything over eight in a day counts as overtime. Raise anything that looks wrong with
+            the office before the payroll cut-off.
           </p>
         </CardBody>
       </Card>
@@ -343,7 +391,9 @@ export function FieldAccountPage() {
               title: 'If something goes wrong',
               points: [
                 'Make the area safe first. The job can wait; nothing here cannot.',
-                'Call the office on +63 917 555 0142 before you call anyone else.',
+                company.phone
+                  ? `Call the office on ${company.phone} before you call anyone else.`
+                  : 'Call the office before you call anyone else.',
                 'Photograph the scene once it is safe — it is what the incident report needs.',
               ],
             },

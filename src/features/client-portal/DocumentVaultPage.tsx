@@ -6,7 +6,8 @@ import { Card, CardBody } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs } from '@/components/ui/Tabs'
-import { date, humanize, number } from '@/lib/format'
+import { date, number } from '@/lib/format'
+import { DOCUMENT_KIND_LABEL } from '@/lib/labels'
 import { useMyDocuments } from '@/lib/queries/client-portal'
 import type { DocumentKind, StoredDocument } from '@/types/domain'
 import { getPrivateFileUrl } from '@/lib/queries/storage'
@@ -36,6 +37,7 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'receipt', label: 'Receipts' },
   { value: 'warranty_certificate', label: 'Warranties' },
   { value: 'permit', label: 'Permits' },
+  { value: 'other', label: 'Your uploads' },
 ]
 
 /** Small visual cue per document type — faster to scan than text alone. */
@@ -48,6 +50,10 @@ const ICONS: Record<DocumentKind, string> = {
   turnover_certificate: '🏅',
   inspection_report: '🔍',
   permit: '🏛️',
+  survey_report: '📐',
+  as_built: '📏',
+  proof_of_sale: '🏠',
+  other: '📎',
 }
 
 export function DocumentVaultPage() {
@@ -114,7 +120,7 @@ export function DocumentVaultPage() {
     },
     {
       header: 'Type',
-      cell: (doc) => <Badge tone="neutral">{humanize(doc.kind)}</Badge>,
+      cell: (doc) => <Badge tone="neutral">{DOCUMENT_KIND_LABEL[doc.kind]}</Badge>,
     },
     { header: 'Uploaded', cell: (doc) => date(doc.uploadedAt) },
     {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { Logo } from './Logo'
+import { NotificationBell } from './NotificationBell'
 import { Avatar } from '@/components/ui/Avatar'
 import { useAuth } from '@/app/auth/useAuth'
 import { ROLE_LABEL } from '@/lib/labels'
@@ -249,9 +250,7 @@ export function ConsoleLayout({ nav, portalName }: ConsoleLayoutProps) {
             )}
           </div>
           <div className="row">
-            <button className="btn btn--ghost btn--sm" title="Notifications">
-              ◉ <span className="sr-only">Notifications</span>
-            </button>
+            <NotificationBell />
             <Avatar
               initials={user?.avatarInitials ?? '??'}
               url={user?.avatarUrl}

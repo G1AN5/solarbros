@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
+import { splitHours } from '@/lib/work-hours'
 
 /* ============================================================================
    PAYROLL REGISTER
@@ -94,7 +95,7 @@ export function usePayrollPeriod(periodStart: string, periodEnd: string) {
         .eq('period_end', periodEnd)
         .maybeSingle()
 
-      if (runError) throw runError
+      if (runError) throwReadable(runError)
       if (!runRow) return { run: null, lines: [] }
 
       const { data: lineRows, error: linesError } = await supabase
@@ -104,7 +105,7 @@ export function usePayrollPeriod(periodStart: string, periodEnd: string) {
         )
         .eq('payroll_run_id', runRow.id)
 
-      if (linesError) throw linesError
+      if (linesError) throwReadable(linesError)
 
       return {
         run: {
@@ -290,6 +291,41 @@ export function useSetPayrollStatus() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: payrollKeys.all })
+    },
+  })
+}
+
+/**
+ * Hours each person logged from the field app in a period, split into regular
+ * and overtime by the same rule the field app shows them (work-hours.ts).
+ *
+ * The register's hours were typed in by hand while the field app was already
+ * recording every shift, so the two could disagree with nothing to say which
+ * was right. The form now shows these beside the inputs and can copy them in;
+ * the accountant still decides what is paid.
+ */
+export function useFieldHours(periodStart: string, periodEnd: string) {
+  return useQuery({
+    queryKey: ['payroll', 'field-hours', periodStart, periodEnd],
+    queryFn: async (): Promise<Record<string, { regular: number; overtime: number }>> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      // The period's bounds in Philippine time, which is when the days begin.
+      const { data, error } = await supabase
+        .from('time_logs')
+        .select('user_id, clock_in, hours')
+        .gte('clock_in', `${periodStart}T00:00:00+08:00`)
+        .lte('clock_in', `${periodEnd}T23:59:59+08:00`)
+      if (error) throwReadable(error)
+
+      const byUser = new Map<string, { clockIn: string; hours: number }[]>()
+      for (const row of data ?? []) {
+        const shifts = byUser.get(row.user_id) ?? []
+        shifts.push({ clockIn: row.clock_in, hours: Number(row.hours ?? 0) })
+        byUser.set(row.user_id, shifts)
+      }
+      return Object.fromEntries(
+        [...byUser.entries()].map(([userId, shifts]) => [userId, splitHours(shifts)]),
+      )
     },
   })
 }

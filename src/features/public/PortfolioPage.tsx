@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { ButtonLink } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
+import { MediaCover } from '@/components/ui/MediaCover'
 import { usePortfolio } from '@/lib/queries/content'
 import { PageBanner } from '@/components/layout/PageBanner'
 
@@ -57,7 +58,7 @@ export function PortfolioPage() {
           <div className="grid">
             {visible.map((item) => (
               <Card key={item.id} interactive className="portfolio-item">
-                <div className="portfolio-item__media">Installation photo</div>
+                <MediaCover path={item.coverPath} alt={item.title} />
                 <CardBody>
                   <div className="row row--between">
                     <h4>{item.title}</h4>

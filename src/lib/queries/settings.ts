@@ -161,15 +161,19 @@ export function useUpdateStockThresholds() {
       if (!supabase) throw new Error('Not connected to the backend.')
       if (input.reorderPoint < 0) throw new Error('A reorder point cannot be negative.')
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('stock_items')
         .update({
           reorder_point: input.reorderPoint,
           ...(input.unitCost !== undefined ? { unit_cost: input.unitCost } : {}),
         })
         .eq('id', input.id)
+        .select('id')
 
       if (error) throwReadable(error)
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('That was refused — the catalogue is kept by the inventory manager.')
+      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['inv'] })

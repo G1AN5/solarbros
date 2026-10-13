@@ -3171,6 +3171,13 @@ export type Database = {
       is_internal: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       may_message: { Args: { p_other: string }; Returns: boolean }
+      monthly_collections: {
+        Args: { p_months?: number }
+        Returns: {
+          collected: number
+          month: string
+        }[]
+      }
       messageable_people: {
         Args: never
         Returns: {
@@ -3187,6 +3194,22 @@ export type Database = {
       }
       owns_project: { Args: { p_project_id: string }; Returns: boolean }
       project_contact: { Args: { p_project_id: string }; Returns: Json }
+      quotation_items_for_client: {
+        Args: { p_quotation_id: string }
+        Returns: {
+          description: string
+          quantity: number
+        }[]
+      }
+      rate_ticket: {
+        Args: { p_rating: number; p_ticket_id: string }
+        Returns: undefined
+      }
+      refresh_time_based_statuses: { Args: never; Returns: Json }
+      respond_to_quotation: {
+        Args: { p_accept: boolean; p_quotation_id: string; p_reason?: string }
+        Returns: undefined
+      }
       project_gate_status: { Args: { p_project_id: string }; Returns: Json }
       project_ready_for_dispatch: {
         Args: { p_project_id: string }

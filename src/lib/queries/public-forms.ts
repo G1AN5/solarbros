@@ -234,3 +234,26 @@ export function useAvailableSlots(date?: string) {
     },
   })
 }
+
+/**
+ * Dates the company has closed — holidays, stock-takes — so the public
+ * calendar can grey them out before anybody picks one. Only the date and the
+ * reason are readable, by design (0065).
+ */
+export function useClosedDates() {
+  return useQuery({
+    queryKey: ['public', 'closed-dates'],
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<string[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const { data, error } = await supabase
+        .from('booking_blackouts')
+        .select('blackout_date')
+        .gte('blackout_date', today)
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => row.blackout_date)
+    },
+  })
+}

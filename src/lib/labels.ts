@@ -13,6 +13,7 @@
 import type {
   AppointmentStatus,
   AppointmentType,
+  DocumentKind,
   InvoiceStatus,
   LeadStage,
   MilestoneKey,
@@ -103,6 +104,7 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
   in_progress: 'In Progress',
   on_hold: 'On Hold',
   completed: 'Completed',
+  cancelled: 'Cancelled',
 }
 
 export const PROJECT_STATUS_TONE: Record<ProjectStatus, Tone> = {
@@ -110,6 +112,7 @@ export const PROJECT_STATUS_TONE: Record<ProjectStatus, Tone> = {
   in_progress: 'warning',
   on_hold: 'danger',
   completed: 'success',
+  cancelled: 'neutral',
 }
 
 /* --- System types --------------------------------------------------------------- */
@@ -134,8 +137,18 @@ export const APPOINTMENT_STATUS_TONE: Record<AppointmentStatus, Tone> = {
   requested: 'info',
   confirmed: 'brand',
   dispatched: 'warning',
+  in_progress: 'warning',
   completed: 'success',
   cancelled: 'neutral',
+}
+
+export const APPOINTMENT_STATUS_LABEL: Record<AppointmentStatus, string> = {
+  requested: 'Requested',
+  confirmed: 'Confirmed',
+  dispatched: 'Crew assigned',
+  in_progress: 'Crew on site',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
 }
 
 /* --- Inventory --------------------------------------------------------------------- */
@@ -184,6 +197,21 @@ export const INVOICE_STATUS_TONE: Record<InvoiceStatus, Tone> = {
   partially_paid: 'warning',
   paid: 'success',
   overdue: 'danger',
+}
+
+export const DOCUMENT_KIND_LABEL: Record<DocumentKind, string> = {
+  quotation: 'Quotation',
+  contract: 'Contract',
+  invoice: 'Invoice',
+  receipt: 'Receipt / proof of payment',
+  warranty_certificate: 'Warranty certificate',
+  turnover_certificate: 'Turnover certificate',
+  inspection_report: 'Inspection report',
+  permit: 'Permit',
+  survey_report: 'Site survey report',
+  as_built: 'As-built drawings',
+  proof_of_sale: 'Proof of sale',
+  other: 'Other document',
 }
 
 export const PAYMENT_STAGE_LABEL: Record<PaymentStage, string> = {

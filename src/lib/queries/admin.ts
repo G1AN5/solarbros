@@ -102,11 +102,15 @@ export function useSetStaffActive() {
   return useMutation({
     mutationFn: async (input: { userId: string; isActive: boolean }) => {
       if (!supabase) throw new Error('Not connected to the backend.')
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update({ is_active: input.isActive })
         .eq('id', input.userId)
+        .select('id')
       if (error) throwReadable(error)
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('That account could not be changed — only an administrator can do this.')
+      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.staff })

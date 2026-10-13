@@ -131,6 +131,87 @@ export function useCreatePermit() {
 }
 
 /**
+ * Every application a typical rooftop system needs, in one go.
+ *
+ * Tracking a permit meant five trips through the same form per project, and
+ * the one that got forgotten was the one that held the job up. Types the
+ * project already tracks are skipped, so pressing it twice adds nothing.
+ */
+export function useCreatePermitSet() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      projectId: string
+      municipality: string
+      utility: string
+      netMetering: boolean
+    }): Promise<number> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+
+      const { data: existing, error: readError } = await supabase
+        .from('permits')
+        .select('permit_type')
+        .eq('project_id', input.projectId)
+      if (readError) throwReadable(readError)
+      const have = new Set((existing ?? []).map((row) => row.permit_type))
+
+      const hall = input.municipality.trim()
+      const utility = input.utility.trim()
+      const wanted: { type: PermitType; authority: string }[] = [
+        { type: 'lgu_building', authority: `${hall} — Office of the Building Official` },
+        { type: 'electrical', authority: `${hall} — Office of the Building Official` },
+        { type: 'utility_interconnection', authority: utility },
+        ...(input.netMetering ? [{ type: 'net_metering' as const, authority: utility }] : []),
+        { type: 'permission_to_operate', authority: utility },
+      ]
+      const rows = wanted
+        .filter((w) => !have.has(w.type))
+        .map((w) => ({
+          project_id: input.projectId,
+          permit_type: w.type,
+          authority: w.authority,
+          status: 'preparing' as const,
+        }))
+      if (rows.length === 0) return 0
+
+      const { error } = await supabase.from('permits').insert(rows)
+      if (error) throwReadable(error)
+      return rows.length
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+    },
+  })
+}
+
+/** Remove an application that was never filed — added by mistake, or not needed. */
+export function useDeletePermit() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { id: string }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('permits')
+        .delete()
+        .eq('id', input.id)
+        .eq('status', 'preparing')
+        .select('id')
+      if (error) throwReadable(error)
+      if ((data?.length ?? 0) === 0) {
+        throw new Error(
+          'Only an application still being prepared can be removed. One that was filed stays, as the record.',
+        )
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ops'] })
+    },
+  })
+}
+
+/**
  * Record what an outside body decided.
  *
  * `recorded_by` is sent explicitly here rather than left to a trigger, because
@@ -175,10 +256,9 @@ export function useRecordPermitDecision() {
           decided_at: isDecision ? new Date().toISOString() : null,
           recorded_by: isDecision ? input.userId : null,
           recorded_at: isDecision ? new Date().toISOString() : null,
-          submitted_at:
-            input.status === 'submitted' || input.status === 'under_review'
-              ? new Date().toISOString()
-              : undefined,
+          /* Stamped when it goes in, and only then — moving on to "under
+             review" used to overwrite the filing date with the review date. */
+          submitted_at: input.status === 'submitted' ? new Date().toISOString() : undefined,
         })
         .eq('id', input.permitId)
         .select('id')
@@ -207,9 +287,14 @@ export interface Supplier {
   id: string
   name: string
   contactPerson: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
   leadTimeDays: number
+  isActive: boolean
 }
 
+/** Every supplier, active or not — the order form filters to the active ones. */
 export function useSuppliers() {
   return useQuery({
     queryKey: procurementKeys.suppliers,
@@ -218,16 +303,120 @@ export function useSuppliers() {
       if (!supabase) throw new Error(NOT_CONNECTED)
       const { data, error } = await supabase
         .from('suppliers')
-        .select('id, name, contact_person, lead_time_days')
-        .eq('is_active', true)
+        .select('id, name, contact_person, email, phone, address, lead_time_days, is_active')
         .order('name')
       if (error) throwReadable(error)
       return (data ?? []).map((row) => ({
         id: row.id,
         name: row.name,
         contactPerson: row.contact_person,
+        email: row.email,
+        phone: row.phone,
+        address: row.address,
         leadTimeDays: row.lead_time_days,
+        isActive: row.is_active,
       }))
+    },
+  })
+}
+
+/* Suppliers could only be added in the database, so a new distributor meant
+   asking a developer before a single order could be raised with them. A
+   supplier with orders against it is deactivated rather than deleted — the
+   orders still need to say who they were placed with. */
+export function useSaveSupplier() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      id?: string
+      name: string
+      contactPerson?: string
+      email?: string
+      phone?: string
+      address?: string
+      leadTimeDays: number
+      isActive?: boolean
+    }) => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      if (!input.name.trim()) throw new Error('Give the supplier a name.')
+
+      const row = {
+        name: input.name.trim(),
+        contact_person: input.contactPerson?.trim() || null,
+        email: input.email?.trim() || null,
+        phone: input.phone?.trim() || null,
+        address: input.address?.trim() || null,
+        lead_time_days: Math.max(0, Math.round(input.leadTimeDays)),
+        is_active: input.isActive ?? true,
+      }
+
+      const { data, error } = input.id
+        ? await supabase.from('suppliers').update(row).eq('id', input.id).select('id')
+        : await supabase.from('suppliers').insert(row).select('id')
+      if (error) throwReadable(error)
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('That was refused — suppliers are kept by the inventory manager.')
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: procurementKeys.suppliers })
+    },
+  })
+}
+
+/* ============================================================================
+   WHAT SIGNED PROJECTS ARE STILL WAITING FOR
+   ----------------------------------------------------------------------------
+   Counter-signing reserves the bill of materials, and whatever the warehouse
+   could not cover is held as 'short'. Nothing on this page showed those, so
+   the reorder prompts — which compare stock with a reorder point — could read
+   "Stock healthy" while a signed project sat waiting for six inverters.
+   Receiving an order fills them automatically, oldest project first (0072).
+   ========================================================================== */
+
+export interface Shortfall {
+  id: string
+  projectId: string
+  projectReference: string
+  clientName: string
+  stockItemId: string
+  itemName: string
+  sku: string
+  unitCost: number
+  quantity: number
+  held: number
+  short: number
+}
+
+export function useProjectShortfalls() {
+  return useQuery({
+    queryKey: ['inv', 'shortfalls'],
+    queryFn: async (): Promise<Shortfall[]> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase
+        .from('stock_reservations')
+        .select(
+          'id, project_id, stock_item_id, quantity, quantity_held, created_at, project:projects!stock_reservations_project_id_fkey(reference, status, client:profiles!projects_client_id_fkey(full_name)), item:stock_items!stock_reservations_stock_item_id_fkey(name, sku, unit_cost)',
+        )
+        .eq('status', 'short')
+        .order('created_at')
+      if (error) throwReadable(error)
+      return (data ?? [])
+        .filter((row) => row.project && !['cancelled', 'completed'].includes(row.project.status))
+        .map((row) => ({
+          id: row.id,
+          projectId: row.project_id,
+          projectReference: row.project?.reference ?? '',
+          clientName: row.project?.client?.full_name ?? 'Customer',
+          stockItemId: row.stock_item_id,
+          itemName: row.item?.name ?? 'Item',
+          sku: row.item?.sku ?? '',
+          unitCost: Number(row.item?.unit_cost ?? 0),
+          quantity: Number(row.quantity),
+          held: Number(row.quantity_held),
+          short: Number(row.quantity) - Number(row.quantity_held),
+        }))
     },
   })
 }
@@ -365,7 +554,7 @@ export function useCreatePurchaseOrder() {
         // An order with no lines is worse than no order: it looks like work in
         // progress and orders nothing.
         await supabase.from('purchase_orders').delete().eq('id', po.id)
-        throw linesError
+        throwReadable(linesError)
       }
 
       return po
@@ -376,12 +565,18 @@ export function useCreatePurchaseOrder() {
   })
 }
 
-/** Approve, subject to the requisition limit the database enforces. */
+/**
+ * Move an order along: send it up for approval, approve it, mark it ordered,
+ * or cancel it. The requisition limit is the database's to enforce (0026).
+ */
 export function useApprovePurchaseOrder() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (input: { id: string; status: 'approved' | 'ordered' | 'cancelled' }) => {
+    mutationFn: async (input: {
+      id: string
+      status: 'pending_approval' | 'approved' | 'ordered' | 'cancelled'
+    }) => {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
       const { data, error } = await supabase
@@ -463,7 +658,7 @@ export function useMatchPurchaseOrder() {
         throw new Error("Enter the supplier's invoice number.")
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('purchase_orders')
         .update({
           supplier_invoice_ref: input.supplierInvoiceRef.trim(),
@@ -471,8 +666,12 @@ export function useMatchPurchaseOrder() {
           matched_by: input.userId,
         })
         .eq('id', input.id)
+        .select('id')
 
       if (error) throwReadable(error)
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('That match could not be recorded — your role may not change orders.')
+      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['inv'] })

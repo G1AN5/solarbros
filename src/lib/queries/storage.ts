@@ -160,7 +160,7 @@ export function useUploadProjectFile() {
         // no upload, because it still counts against storage and quietly
         // accumulates.
         await supabase.storage.from('project-files').remove([path])
-        throw rowError
+        throwReadable(rowError)
       }
 
       return path
@@ -200,7 +200,8 @@ export function useClientUpload() {
     mutationFn: async (input: {
       file: File
       projectId: string
-      kind: 'proof_of_sale' | 'other'
+      /** 'receipt' is a proof of payment — it notifies the finance team (0072). */
+      kind: 'proof_of_sale' | 'receipt' | 'other'
       ticketId?: string
     }) => {
       if (!supabase) throw new Error('Not connected to the backend.')
@@ -228,7 +229,7 @@ export function useClientUpload() {
 
       if (rowError) {
         await supabase.storage.from('project-files').remove([path])
-        throw rowError
+        throwReadable(rowError)
       }
 
       return path
@@ -337,7 +338,7 @@ export function useUploadSitePhoto() {
 
       if (rowError) {
         await supabase.storage.from('site-photos').remove([path])
-        throw rowError
+        throwReadable(rowError)
       }
 
       return path
@@ -346,6 +347,32 @@ export function useUploadSitePhoto() {
        technician has just taken, which reads as the upload having failed. */
     onSuccess: (_path, input) => {
       void queryClient.invalidateQueries({ queryKey: sitePhotoKeys.forProject(input.projectId) })
+    },
+  })
+}
+
+/**
+ * Signed URLs for a batch of private files — the thumbnails in a photo grid.
+ *
+ * One request for the whole grid rather than one per photo, valid for ten
+ * minutes and cached for five, so moving between tabs does not sign
+ * everything again. Nothing is fetched until a grid is actually on screen.
+ */
+export function useSignedUrls(bucket: 'project-files' | 'site-photos', paths: string[]) {
+  const sorted = [...paths].sort()
+  return useQuery({
+    queryKey: ['signed-urls', bucket, sorted.join('|')],
+    enabled: sorted.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      if (!supabase) throw new Error(NOT_CONNECTED)
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrls(sorted, 600)
+      if (error) throwReadable(error)
+      const byPath: Record<string, string> = {}
+      for (const row of data ?? []) {
+        if (row.path && row.signedUrl) byPath[row.path] = row.signedUrl
+      }
+      return byPath
     },
   })
 }

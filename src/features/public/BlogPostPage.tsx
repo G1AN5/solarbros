@@ -1,8 +1,10 @@
+import { Fragment, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ButtonLink } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { MediaCover } from '@/components/ui/MediaCover'
 import { QueryState } from '@/components/ui/QueryState'
 import { useBlogPosts } from '@/lib/queries/content'
 import { date } from '@/lib/format'
@@ -11,8 +13,11 @@ import { date } from '@/lib/format'
    BlogPostPage — a single article, addressed by its slug (/blog/:slug).
    ----------------------------------------------------------------------------
    Slug-based URLs (not IDs) because they are readable and rank better in
-   search. The body is a placeholder: when the CMS lands, render markdown/MDX
-   from the `blog_posts` table here.
+   search. The body is what the content editor wrote: blank lines separate
+   paragraphs, and a handful of Markdown marks are understood — "## " for a
+   heading, "- " or "1. " for a list, **bold**, and [links](https://…). It is
+   turned into React elements, never into injected HTML, so an article cannot
+   carry a script onto the public site.
 
    Every article ends with a call to action back into the funnel — the whole
    point of the SEO content is to move readers to the estimator.
@@ -78,27 +83,24 @@ export function BlogPostPage() {
           </p>
         </header>
 
-        <div
-          className="portfolio-item__media"
-          style={{ height: 260, borderRadius: 'var(--radius-lg)' }}
-        >
-          Cover image
-        </div>
+        {post.coverPath && (
+          <MediaCover
+            path={post.coverPath}
+            alt={post.title}
+            style={{ aspectRatio: 'auto', height: 260, borderRadius: 'var(--radius-lg)' }}
+          />
+        )}
 
-        {/* Placeholder body — replace with rendered markdown from the CMS. */}
         <div
           className="stack"
           style={{ marginTop: 'var(--space-8)', fontSize: 'var(--text-md)', lineHeight: 1.7 }}
         >
-          <p className="muted">
-            Article body renders here once the content management module is connected. The layout is
-            deliberately narrow (about 75 characters per line) because that is the comfortable
-            reading measure for long-form text.
-          </p>
-          <p className="muted">
-            Headings, lists, images, tables and callouts will all be styled from the same design
-            tokens the rest of the site uses, so editorial content never looks bolted on.
-          </p>
+          {post.body?.trim() ? (
+            <ArticleBody source={post.body} />
+          ) : (
+            <p className="muted">{post.excerpt}</p>
+          )}
+          {post.authorName && <p className="small dim">— {post.authorName}</p>}
         </div>
 
         <Card accent style={{ marginTop: 'var(--space-12)' }}>
@@ -115,4 +117,74 @@ export function BlogPostPage() {
       </div>
     </article>
   )
+}
+
+/* --- The article body ------------------------------------------------------ */
+
+function ArticleBody({ source }: { source: string }) {
+  const blocks = source.replace(/\r\n/g, '\n').split(/\n{2,}/)
+  return (
+    <>
+      {blocks.map((block, index) => {
+        const text = block.trim()
+        if (!text) return null
+        if (text.startsWith('### ')) return <h4 key={index}>{inline(text.slice(4))}</h4>
+        if (text.startsWith('## ')) return <h3 key={index}>{inline(text.slice(3))}</h3>
+        if (text.startsWith('# ')) return <h2 key={index}>{inline(text.slice(2))}</h2>
+
+        const lines = text.split('\n')
+        if (lines.every((line) => /^[-*] /.test(line.trim()))) {
+          return (
+            <ul key={index}>
+              {lines.map((line, i) => (
+                <li key={i}>{inline(line.trim().slice(2))}</li>
+              ))}
+            </ul>
+          )
+        }
+        if (lines.every((line) => /^\d+[.)] /.test(line.trim()))) {
+          return (
+            <ol key={index}>
+              {lines.map((line, i) => (
+                <li key={i}>{inline(line.trim().replace(/^\d+[.)] /, ''))}</li>
+              ))}
+            </ol>
+          )
+        }
+        return (
+          <p key={index}>
+            {lines.map((line, i) => (
+              <Fragment key={i}>
+                {i > 0 && <br />}
+                {inline(line)}
+              </Fragment>
+            ))}
+          </p>
+        )
+      })}
+    </>
+  )
+}
+
+/** **bold** and [text](https://…) — nothing else, and only web links. */
+function inline(text: string): ReactNode[] {
+  const parts: ReactNode[] = []
+  const pattern = /\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g
+  let last = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index))
+    if (match[1] !== undefined) {
+      parts.push(<strong key={match.index}>{match[1]}</strong>)
+    } else {
+      parts.push(
+        <a key={match.index} href={match[3]} target="_blank" rel="noreferrer noopener">
+          {match[2]}
+        </a>,
+      )
+    }
+    last = match.index + match[0].length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
 }

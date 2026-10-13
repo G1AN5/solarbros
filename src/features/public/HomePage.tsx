@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 
 import { ButtonLink } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
+import { MediaCover } from '@/components/ui/MediaCover'
 import { BrandMarquee } from '@/components/ui/BrandMarquee'
 import { CountUp } from '@/components/ui/CountUp'
 import { Reveal } from '@/components/ui/Reveal'
@@ -350,7 +351,7 @@ export function HomePage() {
               <div className="grid">
                 {PORTFOLIO.slice(0, 3).map((project) => (
                   <Card key={project.id} interactive className="portfolio-item">
-                    <div className="portfolio-item__media">Installation photo</div>
+                    <MediaCover path={project.coverPath} alt={project.title} />
                     <CardBody>
                       <div className="row row--between">
                         <h4>{project.title}</h4>

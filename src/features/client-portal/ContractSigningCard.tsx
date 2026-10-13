@@ -118,7 +118,9 @@ export function ContractSigningCard() {
             <span className="num strong">{currency(downPayment)}</span>
           </div>
           <div className="row row--between">
-            <span className="muted small">On equipment delivery ({awaiting.deliveryPct}%)</span>
+            <span className="muted small">
+              When the equipment is installed ({awaiting.deliveryPct}%)
+            </span>
             <span className="num">
               {currency((awaiting.contractValue * awaiting.deliveryPct) / 100)}
             </span>
