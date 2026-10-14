@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { QuotationDocument, type QuotationDocumentData } from '@/components/ui/QuotationDocument'
 import { StatTile } from '@/components/ui/StatTile'
 import { useAuth } from '@/app/auth/useAuth'
-import { suggestBom } from '@/lib/bom'
+import { bomGaps, suggestBom } from '@/lib/bom'
 import { currency, currencyCompact, date, humanize } from '@/lib/format'
 import {
   CONTRACT_STATUS_LABEL,
@@ -132,7 +132,15 @@ export function QuotesPage() {
     batteriesIncluded,
   })
 
-  const lines: DraftLine[] = editedLines ?? suggestion.lines
+  /* A package with its own equipment list starts from that list — as long as
+     it is still the package's size and type. Resizing it makes it a custom
+     system, which the sizing rules draft instead. */
+  const packageLines: DraftLine[] | null =
+    pkg && pkg.bom.length > 0 && kwOverride === null && typeOverride === null
+      ? pkg.bom.map((line) => ({ ...line }))
+      : null
+  const linesFrom = editedLines ? 'edited' : packageLines ? 'package' : 'rules'
+  const lines: DraftLine[] = editedLines ?? packageLines ?? suggestion.lines
   const bom = lines
     .map((line) => {
       const item = STOCK.find((s) => s.id === line.stockItemId)
@@ -157,6 +165,18 @@ export function QuotesPage() {
     setEditedLines(update(lines.map((l) => ({ ...l }))))
     setSaved(null)
   }
+
+  /* The rules report what they could not fill. A list from a package or one
+     edited by hand is checked for the essentials instead. */
+  const bomWarnings =
+    linesFrom === 'rules'
+      ? suggestion.warnings
+      : bom.length > 0
+        ? bomGaps(
+            systemType,
+            bom.map((line) => line.item.category),
+          )
+        : []
 
   const materialCost = bom.reduce((sum, line) => sum + line.lineTotal, 0)
   const labourCost = materialCost * (labourPct / 100)
@@ -556,7 +576,21 @@ export function QuotesPage() {
             }
           />
           <CardBody>
-            {suggestion.warnings.length > 0 && (
+            {/* Where the list came from, so nobody mistakes a package's
+                standard list for one sized to this customer, or the reverse. */}
+            {pkg && lead && (
+              <p className="xs dim" style={{ marginBottom: 'var(--space-3)' }}>
+                {linesFrom === 'package'
+                  ? `Starting from the ${pkg.name} package's equipment list. Change anything this customer needs.`
+                  : linesFrom === 'rules' && pkg.bom.length === 0
+                    ? `The ${pkg.name} package has no equipment list yet, so this is drafted from the sizing rules. Lists are kept under Website Content → Packages.`
+                    : linesFrom === 'rules'
+                      ? `Resized from the ${pkg.name} package, so this is drafted from the sizing rules.`
+                      : null}
+              </p>
+            )}
+
+            {bomWarnings.length > 0 && (
               <div
                 className="small"
                 style={{
@@ -567,7 +601,7 @@ export function QuotesPage() {
                   borderRadius: 'var(--radius)',
                 }}
               >
-                {suggestion.warnings.map((w) => (
+                {bomWarnings.map((w) => (
                   <div key={w}>⚠ {w}</div>
                 ))}
               </div>

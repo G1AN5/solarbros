@@ -1,21 +1,30 @@
 import { useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { FormError } from '@/components/ui/FormError'
 import { Tabs } from '@/components/ui/Tabs'
+import { date as fmtDate } from '@/lib/format'
 import {
+  APPOINTMENT_STATUS_LABEL,
+  APPOINTMENT_STATUS_TONE,
+  APPOINTMENT_TYPE_LABEL,
+} from '@/lib/labels'
+import {
+  localToday,
   useJobMaterials,
+  useLoggableJobs,
   useLogMaterials,
-  useMyJobs,
   useProjectSerials,
   useScanSerial,
+  type LoggableJob,
 } from '@/lib/queries/field'
 import { useStock } from '@/lib/queries/inventory-finance'
 import { useCompany } from '@/lib/queries/public-site'
-import { useProjectPhotoCategories, useUploadSitePhoto } from '@/lib/queries/storage'
-import type { StockItem } from '@/types/domain'
+import { usePhotoCategories, useUploadSitePhoto } from '@/lib/queries/storage'
+import type { AppointmentType, StockItem } from '@/types/domain'
 
 /* ============================================================================
    FieldLoggingPage — Media & Hardware Logging.
@@ -42,16 +51,52 @@ import type { StockItem } from '@/types/domain'
 
 type Tool = 'photos' | 'serials' | 'materials'
 
-const PHOTO_CATEGORIES = [
-  'Roof condition (before)',
-  'Racking installed',
-  'Panels mounted',
-  'DC combiner / wiring',
-  'Inverter installation',
-  'AC connection point',
-  'Completed system',
-  'Site cleaned (after)',
-]
+/* What to photograph depends on the visit. A survey records the roof and the
+   electrics before anything is designed; an installation records each stage
+   of the build; a service visit records what was found and what was done. */
+const PHOTO_CATEGORIES: Record<AppointmentType, string[]> = {
+  installation: [
+    'Roof condition (before)',
+    'Racking installed',
+    'Panels mounted',
+    'DC combiner / wiring',
+    'Inverter installation',
+    'AC connection point',
+    'Completed system',
+    'Site cleaned (after)',
+  ],
+  site_survey: [
+    'Roof overview',
+    'Roof structure and condition',
+    'Shading and obstructions',
+    'Main electrical panel',
+    'Utility meter',
+    'Proposed inverter location',
+    'Cable route',
+  ],
+  maintenance: [
+    'System before servicing',
+    'Panels after cleaning',
+    'Inverter display or error log',
+    'Connections checked',
+    'Anything needing attention',
+  ],
+  repair: [
+    'Fault as found',
+    'Part replaced (serial visible)',
+    'Repair completed',
+    'System running after repair',
+  ],
+  virtual_consultation: ['Site photo'],
+}
+
+/** "14 Oct" — the job list is read on a phone, where the year is noise. */
+function shortDay(day: string): string {
+  return new Date(`${day}T00:00:00`).toLocaleDateString('en-PH', {
+    day: 'numeric',
+    month: 'short',
+  })
+}
 
 export function FieldLoggingPage() {
   const stockQuery = useStock()
@@ -61,22 +106,42 @@ export function FieldLoggingPage() {
   const [scanInput, setScanInput] = useState('')
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [logged, setLogged] = useState<string | null>(null)
-  const photoInput = useRef<HTMLInputElement>(null)
+  const cameraInput = useRef<HTMLInputElement>(null)
+  const galleryInput = useRef<HTMLInputElement>(null)
   /** Waiting up to five seconds for a position before a photo is sent. */
   const [locatingPhoto, setLocatingPhoto] = useState(false)
+  /** Gallery photos go up one after another; this is how far along they are. */
+  const [galleryProgress, setGalleryProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  )
 
   /* WHICH JOB IS THIS FOR?
-     Every one of these three tools writes against a PROJECT — a serial number
-     belongs to an installation, consumed stock is deducted against a job. The
-     page had no job context at all, which is part of why none of it was wired:
-     there was nothing to attach the writes to.
+     Every photo, serial and material line is filed against a visit, and
+     through it the customer's project. The page used to choose silently from
+     TODAY's jobs that had a project, and said which only when there were two:
+     a technician could not tell whose job they were logging, and could not
+     log a site survey or yesterday's installation at all.
 
-     The technician's assigned job for today supplies it. With several jobs they
-     pick; with one it is chosen for them. */
-  const jobs = useMyJobs().data ?? []
-  const jobsWithProject = jobs.filter((job) => job.projectId)
-  const [jobId, setJobId] = useState<string>('')
-  const activeJob = jobsWithProject.find((j) => j.id === jobId) ?? jobsWithProject[0]
+     It now lists this technician's recent and coming visits, finished ones
+     included, and always says which one is being logged. Opened from a job
+     (?job=…), it starts on that job; otherwise on the job in hand. */
+  const [searchParams] = useSearchParams()
+  const jobsQuery = useLoggableJobs()
+  const jobs = jobsQuery.data ?? []
+  const [jobId, setJobId] = useState<string>(() => searchParams.get('job') ?? '')
+  const today = localToday()
+  const activeJob: LoggableJob | undefined =
+    jobs.find((j) => j.id === jobId) ??
+    jobs.find((j) => j.date === today && j.status !== 'completed') ??
+    jobs.find((j) => j.date === today) ??
+    jobs.find((j) => j.date < today) ??
+    jobs[jobs.length - 1]
+  /** Serials and materials belong to an installation; a survey has none yet. */
+  const hasProject = Boolean(activeJob?.projectId)
+
+  const upcoming = jobs.filter((j) => j.date > today).reverse()
+  const todays = jobs.filter((j) => j.date === today)
+  const earlier = jobs.filter((j) => j.date < today)
 
   const scanSerial = useScanSerial()
   const logMaterials = useLogMaterials()
@@ -86,11 +151,13 @@ export function FieldLoggingPage() {
      invented serials and count them "2 of 14" forever. */
   const serials = useProjectSerials(activeJob?.projectId).data ?? []
 
-  /* WHICH of the eight required photographs this capture is. The upload has
-     always accepted a category and the page never sent one, so every photo was
-     filed with `photo_category` null and the checklist below could not have
-     been real even in principle. */
-  const [photoCategory, setPhotoCategory] = useState(PHOTO_CATEGORIES[0])
+  /* WHICH of the required photographs this capture is. The upload has always
+     accepted a category and the page never sent one, so every photo was filed
+     with `photo_category` null and the checklist below could not have been
+     real even in principle. The list depends on the kind of visit. */
+  const categories = PHOTO_CATEGORIES[activeJob?.type ?? 'installation']
+  const [chosenCategory, setPhotoCategory] = useState('')
+  const photoCategory = categories.includes(chosenCategory) ? chosenCategory : categories[0]
 
   /* WHAT the serial belongs to. Every asset was filed as the literal string
      "Scanned on site", so the admin asset registry listed a column of identical
@@ -98,7 +165,14 @@ export function FieldLoggingPage() {
      a serial was their inverter or a panel. The technician knows what is in
      their hand; nothing was asking. */
   const [serialItemId, setSerialItemId] = useState('')
-  const capturedCategories = useProjectPhotoCategories(activeJob?.projectId).data ?? []
+  /* An installation's photos are counted across all of its visits — a two-day
+     build is one set. Any other visit counts its own. */
+  const capturedCategories =
+    usePhotoCategories(
+      activeJob?.type === 'installation' && activeJob.projectId
+        ? { projectId: activeJob.projectId }
+        : { appointmentId: activeJob?.id },
+    ).data ?? []
 
   /* What this job is meant to use — its bill of materials as the warehouse
      holds it. Materials are logged against these, and anything else the crew
@@ -204,12 +278,13 @@ export function FieldLoggingPage() {
     })
   }
 
-  function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
+  /* TAKE A PHOTO: one picture, just taken, so where the phone is now is where
+     it was taken — the location goes with it. */
+  function handleCamera(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
     const job = activeJob
-    if (!file || !job?.projectId) return
-    const projectId = job.projectId
+    if (!file || !job) return
     const category = photoCategory
 
     /* "Uploaded" is said once it has been — it used to be said as the upload
@@ -217,11 +292,13 @@ export function FieldLoggingPage() {
     const send = (position?: { latitude: number; longitude: number }) => {
       setLocatingPhoto(false)
       uploadPhoto.mutate(
-        { file, projectId, appointmentId: job.id, category, ...position },
+        { file, projectId: job.projectId ?? null, appointmentId: job.id, category, ...position },
         {
           onSuccess: () =>
             setLogged(
-              position ? 'Photo uploaded with location' : 'Photo uploaded (no location available)',
+              position
+                ? `Photo uploaded with location · ${category}`
+                : `Photo uploaded (no location available) · ${category}`,
             ),
         },
       )
@@ -244,6 +321,46 @@ export function FieldLoggingPage() {
     )
   }
 
+  /* UPLOAD FROM THE GALLERY: pictures taken earlier, often with the phone's
+     own camera while there was no signal. Where the phone is now is not where
+     they were taken, so they go up without a location rather than with a
+     wrong one. Several can be chosen at once; they are sent one at a time. */
+  async function handleGallery(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    const job = activeJob
+    if (files.length === 0 || !job) return
+    const category = photoCategory
+
+    let sent = 0
+    setGalleryProgress({ done: 0, total: files.length })
+    for (const file of files) {
+      try {
+        await uploadPhoto.mutateAsync({
+          file,
+          projectId: job.projectId ?? null,
+          appointmentId: job.id,
+          category,
+        })
+        sent += 1
+      } catch {
+        // Shown under the buttons by FormError; the rest still go up.
+      }
+      setGalleryProgress({ done: sent, total: files.length })
+    }
+    setGalleryProgress(null)
+
+    if (sent === files.length) {
+      setLogged(
+        `${sent} photo${sent === 1 ? '' : 's'} uploaded from the gallery · ${category} (no location attached)`,
+      )
+    } else if (sent > 0) {
+      setLogged(`${sent} of ${files.length} photos uploaded — choose the others again to retry`)
+    }
+  }
+
+  const photoBusy = locatingPhoto || uploadPhoto.isPending || galleryProgress !== null
+
   return (
     <div className="stack">
       <div>
@@ -251,43 +368,90 @@ export function FieldLoggingPage() {
         <p className="small muted">Photos, serial numbers and consumed materials.</p>
       </div>
 
-      {jobsWithProject.length === 0 ? (
-        /* EVERY CONTROL BELOW IS DISABLED IN THIS STATE, and previously
-           nothing said so. A photo, a serial and a material line all have to
-           attach to a project, so with no job assigned the buttons do nothing
-           when tapped — which reads as the camera being broken rather than as
-           there being no job. */
+      {!activeJob ? (
+        /* EVERY CONTROL BELOW IS DISABLED IN THIS STATE, and says why. With
+           nothing to attach them to, the buttons would otherwise do nothing
+           when tapped — which reads as the camera being broken. */
         <Card style={{ borderColor: 'var(--warning-solid)' }}>
           <CardBody>
-            <p className="small strong">No job assigned to you today</p>
-            <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
-              Photos, serial numbers and materials are all recorded against a specific installation,
-              so there is nothing to attach them to yet. The buttons below stay disabled until a job
-              with a project is scheduled for you — ask the dispatcher to assign one, then pull to
-              refresh.
-            </p>
+            {jobsQuery.isLoading ? (
+              <p className="small muted">Loading your jobs…</p>
+            ) : (
+              <>
+                <p className="small strong">No jobs assigned to you</p>
+                <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
+                  Photos, serial numbers and materials are recorded against one of your visits —
+                  from the last two months or the week ahead. Ask the dispatcher to assign you to
+                  the job, then reopen this page.
+                </p>
+              </>
+            )}
           </CardBody>
         </Card>
       ) : (
-        jobsWithProject.length > 1 && (
-          <div className="field">
+        /* WHOSE JOB THIS IS, always on screen — the customer, the visit and
+           the project the photos and serials will be filed under. */
+        <Card className="log-job">
+          <CardBody>
             <label className="field__label" htmlFor="logJob">
-              Logging against
+              Logging for
             </label>
             <select
               id="logJob"
               className="select"
-              value={activeJob?.id ?? ''}
-              onChange={(e) => setJobId(e.target.value)}
+              value={activeJob.id}
+              onChange={(e) => {
+                setJobId(e.target.value)
+                setLogged(null)
+              }}
             >
-              {jobsWithProject.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.timeSlot} · {job.clientName}
-                </option>
-              ))}
+              {(
+                [
+                  ['Today', todays],
+                  ['Coming up', upcoming],
+                  ['Earlier', earlier],
+                ] as const
+              ).map(([label, group]) =>
+                group.length > 0 ? (
+                  <optgroup key={label} label={label}>
+                    {group.map((job) => (
+                      <option key={job.id} value={job.id}>
+                        {shortDay(job.date)} · {job.clientName} · {APPOINTMENT_TYPE_LABEL[job.type]}
+                        {job.status === 'completed' ? ' ✓' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null,
+              )}
             </select>
-          </div>
-        )
+
+            <div className="log-job__summary">
+              <div className="strong">{activeJob.clientName || 'Customer'}</div>
+              <div className="small">
+                {APPOINTMENT_TYPE_LABEL[activeJob.type]} · {fmtDate(activeJob.date)},{' '}
+                {activeJob.timeSlot}
+              </div>
+              {activeJob.address && <div className="xs dim">📍 {activeJob.address}</div>}
+              <div className="row row--wrap" style={{ gap: 'var(--space-2)' }}>
+                <Badge tone={APPOINTMENT_STATUS_TONE[activeJob.status]}>
+                  {APPOINTMENT_STATUS_LABEL[activeJob.status]}
+                </Badge>
+                {activeJob.projectReference ? (
+                  <Badge tone="neutral">Project {activeJob.projectReference}</Badge>
+                ) : (
+                  <Badge tone="warning">No project yet</Badge>
+                )}
+                <Link
+                  to={`/field/jobs/${activeJob.id}`}
+                  className="xs"
+                  style={{ marginLeft: 'auto' }}
+                >
+                  Open the job →
+                </Link>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
       )}
 
       {logged && (
@@ -320,14 +484,24 @@ export function FieldLoggingPage() {
         <div className="stack">
           <Card>
             <CardBody>
-              {/* `capture="environment"` opens the rear camera straight away on a
-                  phone rather than the photo library — one tap fewer on a roof. */}
+              {/* Two ways in, said plainly. `capture="environment"` opens the
+                  rear camera straight away; without it the phone offers the
+                  gallery, for pictures already taken. There used to be only
+                  the camera, and no way to send a photo taken earlier. */}
               <input
-                ref={photoInput}
+                ref={cameraInput}
                 type="file"
                 accept="image/*"
                 capture="environment"
-                onChange={handlePhoto}
+                onChange={handleCamera}
+                style={{ display: 'none' }}
+              />
+              <input
+                ref={galleryInput}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => void handleGallery(e)}
                 style={{ display: 'none' }}
               />
               {/* Chosen BEFORE the camera opens, because afterwards the
@@ -343,7 +517,7 @@ export function FieldLoggingPage() {
                   value={photoCategory}
                   onChange={(e) => setPhotoCategory(e.target.value)}
                 >
-                  {PHOTO_CATEGORIES.map((category) => (
+                  {categories.map((category) => (
                     <option key={category} value={category}>
                       {category}
                       {capturedCategories.includes(category) ? ' ✓' : ''}
@@ -352,22 +526,32 @@ export function FieldLoggingPage() {
                 </select>
               </div>
 
-              <Button
-                variant="primary"
-                block
-                size="lg"
-                style={{ marginTop: 'var(--space-3)' }}
-                disabled={!activeJob || locatingPhoto || uploadPhoto.isPending}
-                onClick={() => photoInput.current?.click()}
-              >
+              <div className="photo-pick">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  disabled={!activeJob || photoBusy}
+                  onClick={() => cameraInput.current?.click()}
+                >
+                  📷 Take a photo
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  disabled={!activeJob || photoBusy}
+                  onClick={() => galleryInput.current?.click()}
+                >
+                  🖼️ Upload from gallery
+                </Button>
+              </div>
+              <p className="xs dim center" style={{ marginTop: 'var(--space-2)' }}>
                 {locatingPhoto
                   ? 'Finding your location…'
-                  : uploadPhoto.isPending
-                    ? 'Uploading…'
-                    : '📷 Take photo'}
-              </Button>
-              <p className="xs dim center" style={{ marginTop: 'var(--space-2)' }}>
-                GPS coordinates and timestamp are embedded automatically.
+                  : galleryProgress
+                    ? `Uploading ${Math.min(galleryProgress.done + 1, galleryProgress.total)} of ${galleryProgress.total}…`
+                    : uploadPhoto.isPending
+                      ? 'Uploading…'
+                      : 'A photo taken here is filed with your location and the time. Photos from the gallery are filed with the time only.'}
               </p>
             </CardBody>
           </Card>
@@ -378,7 +562,7 @@ export function FieldLoggingPage() {
                 Required photos
               </h3>
               <div className="stack stack--sm">
-                {PHOTO_CATEGORIES.map((category) => {
+                {categories.map((category) => {
                   /* Read from the photographs actually on this project. It was
                      `index < 3` — the same three categories reported captured
                      on every job, on an empty database, forever. */
@@ -396,17 +580,37 @@ export function FieldLoggingPage() {
                 })}
               </div>
               <p className="xs dim" style={{ marginTop: 'var(--space-3)' }}>
-                {capturedCategories.length} of {PHOTO_CATEGORIES.length} taken. Take all of them
-                before you leave site — together they are the engineering inspection record, and the
-                customer sees them in their project tracker.
+                {categories.filter((c) => capturedCategories.includes(c)).length} of{' '}
+                {categories.length} taken.{' '}
+                {activeJob?.type === 'site_survey'
+                  ? 'Together they are what the quotation is designed from — the office sees them on the enquiry, and on the project once there is one.'
+                  : 'Take all of them before you leave site — together they are the engineering inspection record, and the customer sees them in their project tracker.'}
               </p>
             </CardBody>
           </Card>
         </div>
       )}
 
+      {/* Serials and materials are an installation's — what was fitted and
+          what it used. A visit with no project has neither yet. */}
+      {(tool === 'serials' || tool === 'materials') && activeJob && !hasProject && (
+        <Card>
+          <CardBody>
+            <p className="small strong">
+              {tool === 'serials' ? 'Serial numbers' : 'Materials'} are recorded against an
+              installation
+            </p>
+            <p className="small muted" style={{ marginTop: 'var(--space-2)' }}>
+              This {APPOINTMENT_TYPE_LABEL[activeJob.type].toLowerCase()} for{' '}
+              {activeJob.clientName || 'the customer'} has no project yet, so there is nothing to
+              file them under. Photos can still be taken — use the Photos tab.
+            </p>
+          </CardBody>
+        </Card>
+      )}
+
       {/* --------------------------------------------------- SERIALS */}
-      {tool === 'serials' && (
+      {tool === 'serials' && hasProject && (
         <div className="stack">
           <Card>
             <CardBody>
@@ -521,7 +725,7 @@ export function FieldLoggingPage() {
       )}
 
       {/* ------------------------------------------------- MATERIALS */}
-      {tool === 'materials' && (
+      {tool === 'materials' && hasProject && (
         <div className="stack">
           <Card>
             <CardBody>

@@ -1,6 +1,6 @@
 import { FormError } from '@/components/ui/FormError'
 import { date, humanize } from '@/lib/format'
-import { useProjectPhotos, useSetPhotoVisibility } from '@/lib/queries/operations'
+import { useSetPhotoVisibility, useSitePhotos } from '@/lib/queries/operations'
 import { useSignedUrls } from '@/lib/queries/storage'
 
 /* ============================================================================
@@ -16,13 +16,15 @@ import { useSignedUrls } from '@/lib/queries/storage'
    ========================================================================== */
 
 interface PhotoGridProps {
-  projectId: string
+  projectId?: string
+  /** Visits with no project yet — a site survey's photos, shown on its enquiry. */
+  appointmentIds?: string[]
   /** Office view: every photo, with a switch for whether the customer sees it. */
   manage?: boolean
 }
 
-export function PhotoGrid({ projectId, manage = false }: PhotoGridProps) {
-  const photosQuery = useProjectPhotos(projectId)
+export function PhotoGrid({ projectId, appointmentIds, manage = false }: PhotoGridProps) {
+  const photosQuery = useSitePhotos({ projectId, appointmentIds })
   const photos = photosQuery.data ?? []
   const urls = useSignedUrls(
     'site-photos',
@@ -35,9 +37,11 @@ export function PhotoGrid({ projectId, manage = false }: PhotoGridProps) {
   if (photos.length === 0) {
     return (
       <p className="small muted">
-        {manage
-          ? 'No photos yet. The crew takes them from the field app at each stage of the job.'
-          : 'Photos appear here as our crew documents each stage of your installation.'}
+        {!projectId
+          ? 'No photos from these visits yet. The technician takes them from the field app.'
+          : manage
+            ? 'No photos yet. The crew takes them from the field app at each stage of the job.'
+            : 'Photos appear here as our crew documents each stage of your installation.'}
       </p>
     )
   }

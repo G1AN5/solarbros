@@ -92,6 +92,8 @@ export function NotificationBell({ inverse = false }: { inverse?: boolean }) {
   const notificationsQuery = useMyNotifications()
   const markRead = useMarkNotificationsRead()
   const [open, setOpen] = useState(false)
+  /** Where the panel starts on a phone: just under the header the bell is in. */
+  const [panelTop, setPanelTop] = useState(72)
   const root = useRef<HTMLDivElement>(null)
 
   const notifications = notificationsQuery.data ?? []
@@ -129,7 +131,12 @@ export function NotificationBell({ inverse = false }: { inverse?: boolean }) {
         type="button"
         className="bell__button"
         style={inverse ? { background: 'transparent', color: 'var(--white)' } : undefined}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          const header = root.current?.closest('header')
+          const bottom = (header ?? root.current)?.getBoundingClientRect().bottom
+          if (bottom) setPanelTop(Math.round(bottom) + 8)
+          setOpen((value) => !value)
+        }}
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-expanded={open}
       >
@@ -138,7 +145,11 @@ export function NotificationBell({ inverse = false }: { inverse?: boolean }) {
       </button>
 
       {open && (
-        <div className="bell__panel" role="menu">
+        <div
+          className="bell__panel"
+          role="menu"
+          style={{ '--bell-top': `${panelTop}px` } as React.CSSProperties}
+        >
           <div className="bell__head">
             <span className="strong small">Notifications</span>
             <span className="row" style={{ gap: 'var(--space-2)' }}>

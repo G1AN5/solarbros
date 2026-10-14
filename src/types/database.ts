@@ -1224,6 +1224,7 @@ export type Database = {
       }
       packages: {
         Row: {
+          bom: Json
           created_at: string
           featured: boolean
           id: string
@@ -1239,6 +1240,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bom?: Json
           created_at?: string
           featured?: boolean
           id?: string
@@ -1254,6 +1256,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bom?: Json
           created_at?: string
           featured?: boolean
           id?: string

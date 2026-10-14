@@ -47,14 +47,18 @@
   flex-wrap: wrap;
 }
 
-/* Auto-fitting card grid: columns collapse responsively with no media query. */
+/* Auto-fitting card grid: columns collapse responsively with no media query.
+   The `min(…, 100%)` matters on a phone. Without it, a 340px column minimum
+   in the 328px a 360px-wide Android screen leaves was still 340px: every card
+   ran 12px into the right-hand gutter, and whole pages looked pushed to the
+   right. */
 .grid {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(var(--col-min, 260px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--col-min, 260px), 100%), 1fr));
 }
 .grid--2 {
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
 }
 .grid--4 {
   --col-min: 200px;
@@ -557,6 +561,13 @@
   border-inline: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+}
+/* On a phone the column IS the screen, and its side borders made it 2px wider
+   than the screen it sat on. */
+@media (max-width: 520px) {
+  .shell--field {
+    border-inline: 0;
+  }
 }
 .field-topbar {
   position: sticky;

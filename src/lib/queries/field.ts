@@ -47,6 +47,7 @@ import type { Appointment, Project } from '@/types/domain'
 
 export const fieldKeys = {
   jobs: (userId?: string, date?: string) => ['field', 'jobs', userId, date] as const,
+  loggable: (userId?: string) => ['field', 'loggable', userId] as const,
   schedule: (userId?: string) => ['field', 'schedule', userId] as const,
   job: (appointmentId?: string) => ['field', 'job', appointmentId] as const,
   timeLogs: (userId?: string) => ['field', 'time-logs', userId] as const,
@@ -354,6 +355,59 @@ export function useMySchedule() {
 
       if (error) throwReadable(error)
       return (data ?? []).map((row) => toAppointment(row, crewNames(row)))
+    },
+  })
+}
+
+/* ============================================================================
+   JOBS TO LOG AGAINST
+   ----------------------------------------------------------------------------
+   The logging screen offered only TODAY's jobs that already had a project. A
+   site survey (no project yet) and yesterday's finished installation could
+   not be photographed at all — and both are routine: photos go up once back
+   in signal, serials are scanned the morning after.
+
+   It now offers this technician's visits from the last sixty days to the week
+   ahead, finished ones included, newest first. Row-level security already
+   limits a technician to the visits they are assigned to.
+   ========================================================================== */
+
+export interface LoggableJob extends Appointment {
+  projectReference?: string
+}
+
+/** A local YYYY-MM-DD some days from another. */
+function shiftDay(day: string, days: number): string {
+  const d = new Date(`${day}T00:00:00`)
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function useLoggableJobs() {
+  const { user } = useAuth()
+
+  return useQuery({
+    queryKey: fieldKeys.loggable(user?.id),
+    enabled: Boolean(user),
+    staleTime: 15_000,
+    queryFn: async (): Promise<LoggableJob[]> => {
+      const today = localToday()
+      const { data, error } = await client()
+        .from('appointments')
+        .select(
+          '*, appointment_assignees!inner(user_id, profiles!appointment_assignees_user_id_fkey(full_name)), project:projects(reference)',
+        )
+        .gte('scheduled_date', shiftDay(today, -60))
+        .lte('scheduled_date', shiftDay(today, 7))
+        .neq('status', 'cancelled')
+        .order('scheduled_date', { ascending: false })
+        .order('time_slot')
+
+      if (error) throwReadable(error)
+      return (data ?? []).map((row) => ({
+        ...toAppointment(row, crewNames(row)),
+        projectReference: row.project?.reference ?? undefined,
+      }))
     },
   })
 }

@@ -103,6 +103,13 @@ code {
   border-radius: var(--radius-sm);
 }
 
+/* A reference in a table is one thing to read. On a phone the column was
+   narrow enough to break INV-2026-1121 at every hyphen; the table scrolls
+   sideways instead. */
+td code {
+  white-space: nowrap;
+}
+
 hr {
   border: 0;
   border-top: 1px solid var(--border);

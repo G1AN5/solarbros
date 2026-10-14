@@ -235,3 +235,57 @@ export function suggestBom(input: BomInput): BomDraft {
 
   return { lines: [...merged.values()], warnings, panelCount, batteryCount }
 }
+
+/* ============================================================================
+   A PACKAGE'S OWN LIST
+   ----------------------------------------------------------------------------
+   A package can carry the equipment it is sold with (migration 0079). The
+   quotation builder starts from that list instead of the rules above, and the
+   same gaps are pointed out either way: a list somebody typed can leave out
+   an inverter as easily as a rule could.
+   ========================================================================== */
+
+export interface PackageBomLine {
+  stockItemId: string
+  quantity: number
+}
+
+/**
+ * The `bom` column as lines, whatever arrives — a database that has not had
+ * 0079 yet sends nothing at all. Malformed entries are dropped, and an item
+ * listed twice is one line with the quantities added.
+ */
+export function parsePackageBom(value: unknown): PackageBomLine[] {
+  if (!Array.isArray(value)) return []
+  const merged = new Map<string, number>()
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue
+    const { stock_item_id: id, quantity } = entry as Record<string, unknown>
+    const qty = Number(quantity)
+    if (typeof id !== 'string' || !id || !Number.isFinite(qty) || qty <= 0) continue
+    merged.set(id, (merged.get(id) ?? 0) + qty)
+  }
+  return [...merged].map(([stockItemId, quantity]) => ({ stockItemId, quantity }))
+}
+
+/** The lines in the shape the `bom` column stores. */
+export function serialisePackageBom(lines: PackageBomLine[]) {
+  return parsePackageBom(
+    lines.map((line) => ({ stock_item_id: line.stockItemId, quantity: line.quantity })),
+  ).map((line) => ({ stock_item_id: line.stockItemId, quantity: line.quantity }))
+}
+
+/** What a system of this type cannot work without that the list does not have. */
+export function bomGaps(
+  systemType: SystemType,
+  categories: Iterable<StockItem['category']>,
+): string[] {
+  const present = new Set(categories)
+  const gaps: string[] = []
+  if (!present.has('panel')) gaps.push('No panels on this bill of materials.')
+  if (!present.has('inverter')) gaps.push('No inverter on this bill of materials.')
+  if (systemType !== 'on_grid' && !present.has('battery')) {
+    gaps.push('No batteries — a hybrid or off-grid system needs them.')
+  }
+  return gaps
+}

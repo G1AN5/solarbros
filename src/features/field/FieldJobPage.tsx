@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { FormError } from '@/components/ui/FormError'
 import { Progress } from '@/components/ui/Progress'
+import { checklistSummary, parseChecklistSummary } from '@/lib/checklist'
 import { dateTime } from '@/lib/format'
 import {
   APPOINTMENT_STATUS_LABEL,
@@ -91,7 +92,8 @@ const CHECKLISTS: Record<string, string[]> = {
 
 /* The ticks are kept on the phone per job, so a reload — or the battery
    dying on a roof — does not lose the morning's checklist. The result goes
-   into the visit record when the job is closed. */
+   into the visit record when the job is closed, and a closed job reads its
+   ticks back from there (src/lib/checklist.ts). */
 const CHECK_KEY = 'solarbros.job-checklist'
 
 function loadChecked(jobId: string): number[] {
@@ -149,9 +151,11 @@ export function FieldJobPage() {
   /** The milestone whose write is in flight, so only that row shows a spinner. */
   const [pendingKey, setPendingKey] = useState<string | null>(null)
 
+  const jobStatus = jobQuery.data?.appointment?.status
   useEffect(() => {
-    if (jobId) saveChecked(jobId, [...checked])
-  }, [jobId, checked])
+    // A finished job's ticks live on its record, not on this phone.
+    if (jobId && jobStatus !== 'completed') saveChecked(jobId, [...checked])
+  }, [jobId, jobStatus, checked])
 
   const job = jobQuery.data?.appointment
   const project = jobQuery.data?.project
@@ -175,9 +179,13 @@ export function FieldJobPage() {
 
   const phone = jobQuery.data?.clientPhone || job.contactPhone
   const checklist = CHECKLISTS[job.type] ?? CHECKLISTS.installation
-  const progress = checked.size / checklist.length
   const isClosed = job.status === 'completed' || closedNote !== null
   const isStarted = job.status === 'in_progress' || Boolean(clockIn)
+  /* Closed: the ticks the record holds. Until the closed visit has reloaded,
+     the ticks still on screen are the ones just recorded. */
+  const recorded = isClosed ? parseChecklistSummary(job.notes, checklist) : null
+  const ticks = recorded ?? checked
+  const progress = ticks.size / checklist.length
 
   function toggleItem(index: number) {
     setChecked((previous) => {
@@ -223,11 +231,7 @@ export function FieldJobPage() {
     if (!job) return
     /* The checklist result goes onto the visit record, where the office and
        the customer can both read it, rather than staying on this phone. */
-    const done = checklist.filter((_, index) => checked.has(index))
-    const missed = checklist.filter((_, index) => !checked.has(index))
-    const summary =
-      `Checklist ${done.length}/${checklist.length} completed on site.` +
-      (missed.length > 0 ? ` Not done: ${missed.join('; ')}.` : '')
+    const summary = checklistSummary(checklist, checked)
     const notes = job.notes ? `${job.notes}\n\n${summary}` : summary
 
     completeJob.mutate(
@@ -292,6 +296,16 @@ export function FieldJobPage() {
             )}
           </div>
 
+          {/* Straight to this job on the logging screen — before or after it
+              is closed, since photos and serials often follow the visit. */}
+          <Link
+            className="btn btn--outline btn--sm btn--block"
+            to={`/field/logging?job=${job.id}`}
+            style={{ marginTop: 'var(--space-2)' }}
+          >
+            📷 Photos, serials &amp; materials
+          </Link>
+
           {/* ------------------------------------------- ARRIVED ON SITE */}
           {!isClosed && (
             <div style={{ marginTop: 'var(--space-4)' }}>
@@ -327,7 +341,7 @@ export function FieldJobPage() {
           <div className="row row--between" style={{ marginBottom: 'var(--space-3)' }}>
             <h3 style={{ fontSize: 'var(--text-base)' }}>Checklist</h3>
             <span className="small dim">
-              {checked.size}/{checklist.length}
+              {ticks.size}/{checklist.length}
             </span>
           </div>
 
@@ -337,12 +351,12 @@ export function FieldJobPage() {
             {checklist.map((item, index) => (
               <div
                 key={item}
-                className={`checklist__item${checked.has(index) ? ' is-done' : ''}`}
+                className={`checklist__item${ticks.has(index) ? ' is-done' : ''}`}
                 onClick={() => !isClosed && toggleItem(index)}
                 role="checkbox"
-                aria-checked={checked.has(index)}
+                aria-checked={ticks.has(index)}
                 aria-disabled={isClosed}
-                tabIndex={0}
+                tabIndex={isClosed ? -1 : 0}
                 onKeyDown={(e) => {
                   if ((e.key === 'Enter' || e.key === ' ') && !isClosed) {
                     e.preventDefault()
@@ -350,8 +364,11 @@ export function FieldJobPage() {
                   }
                 }}
               >
+                {/* The mark is drawn only on a ticked item. An invisible one on
+                    every item showed up as a column of ticks whenever the
+                    text was selected. */}
                 <span className="checklist__box" aria-hidden>
-                  ✓
+                  {ticks.has(index) ? '✓' : ''}
                 </span>
                 <span className="small">{item}</span>
               </div>
@@ -359,8 +376,11 @@ export function FieldJobPage() {
           </div>
 
           <p className="xs dim" style={{ marginTop: 'var(--space-3)' }}>
-            Your ticks are kept on this phone until you close the job, then recorded on the visit
-            for the office and the customer.
+            {!isClosed
+              ? 'Your ticks are kept on this phone until you close the job, then recorded on the visit for the office and the customer.'
+              : recorded || closedNote
+                ? 'Recorded on the visit when the job was closed. The office and the customer see the same result.'
+                : 'This visit was closed without a checklist result on its record.'}
           </p>
         </CardBody>
       </Card>

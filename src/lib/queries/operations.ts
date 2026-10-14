@@ -1099,20 +1099,28 @@ export interface SitePhoto {
   clientVisible: boolean
 }
 
-/** Photos for a project — staff see all; RLS shows a customer the visible ones. */
-export function useProjectPhotos(projectId?: string) {
+/**
+ * Photos for a project, or for visits that have no project yet — a site
+ * survey's, shown on its enquiry. Staff see all; RLS shows a customer the
+ * visible ones on their own project.
+ */
+export function useSitePhotos(scope: { projectId?: string; appointmentIds?: string[] }) {
+  const { projectId } = scope
+  const visitIds = [...(scope.appointmentIds ?? [])].sort()
+
   return useQuery({
-    queryKey: ['ops', 'photos', projectId ?? 'none'],
-    enabled: Boolean(projectId),
+    queryKey: ['ops', 'photos', projectId ?? 'none', visitIds.join(',')],
+    enabled: Boolean(projectId) || visitIds.length > 0,
     queryFn: async (): Promise<SitePhoto[]> => {
       if (!supabase) throw new Error(NOT_CONNECTED)
-      const { data, error } = await supabase
+      const base = supabase
         .from('site_photos')
         .select(
           'id, storage_path, photo_category, caption, taken_at, latitude, longitude, is_client_visible',
         )
-        .eq('project_id', projectId!)
-        .order('taken_at', { ascending: false })
+      const { data, error } = await (
+        projectId ? base.eq('project_id', projectId) : base.in('appointment_id', visitIds)
+      ).order('taken_at', { ascending: false })
       if (error) throwReadable(error)
       return (data ?? []).map((row) => ({
         id: row.id,

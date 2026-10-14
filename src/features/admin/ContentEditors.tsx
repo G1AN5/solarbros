@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { FormError } from '@/components/ui/FormError'
 import { QueryState } from '@/components/ui/QueryState'
+import { bomGaps, suggestBom, type PackageBomLine } from '@/lib/bom'
 import { currency } from '@/lib/format'
+import { STOCK_CATEGORY_LABEL } from '@/lib/labels'
 import {
   useAdminFaqs,
   useAdminPackages,
@@ -19,7 +21,9 @@ import {
   type EditablePackage,
   type LegalSection,
 } from '@/lib/queries/cms'
-import type { SystemType } from '@/types/domain'
+import { useStock } from '@/lib/queries/inventory-finance'
+import { settingNum, useSettings, useSystemAssumptions } from '@/lib/queries/settings'
+import type { StockCategory, SystemType } from '@/types/domain'
 
 /* ============================================================================
    THE THREE EDITORS THAT WERE MISSING
@@ -46,6 +50,207 @@ const EMPTY_PACKAGE = {
   inclusions: '',
   isActive: true,
   sortOrder: 0,
+  bom: [] as PackageBomLine[],
+}
+
+/* ============================================================================
+   WHAT THE PACKAGE IS MADE OF
+   ----------------------------------------------------------------------------
+   The equipment a package is sold with, as catalogue items and quantities.
+   Choosing the package in the quotation builder starts the bill of materials
+   from this list (still editable for the customer in front of you), and from
+   the quotation on it is what gets reserved, bought, installed and scanned.
+
+   "Fill from the sizing rules" drafts it the way the builder would; the
+   price line below shows what the list costs at the usual margin, against
+   the "from" price the website advertises.
+   ========================================================================== */
+
+function PackageBomEditor({
+  lines,
+  onChange,
+  systemType,
+  sizeKw,
+  priceFrom,
+}: {
+  lines: PackageBomLine[]
+  onChange: (lines: PackageBomLine[]) => void
+  systemType: SystemType
+  sizeKw: number
+  priceFrom: number
+}) {
+  const stock = useStock().data ?? []
+  const settings = useSettings().data
+  const hardware = useSystemAssumptions()
+  const [addItemId, setAddItemId] = useState('')
+
+  const rows = lines.map((line) => ({
+    ...line,
+    item: stock.find((s) => s.id === line.stockItemId),
+  }))
+  const materialCost = rows.reduce(
+    (sum, row) => sum + (row.item ? row.item.unitCost * row.quantity : 0),
+    0,
+  )
+  const labourPct = settingNum(settings, 'pricing.labour_overhead_pct', 18)
+  const margin = settingNum(settings, 'pricing.default_margin_pct', 35)
+  const pricedAt = (materialCost * (1 + labourPct / 100)) / (1 - margin / 100)
+  const gaps =
+    lines.length > 0
+      ? bomGaps(
+          systemType,
+          rows.flatMap((row) => (row.item ? [row.item.category] : [])),
+        )
+      : []
+
+  function fillFromRules() {
+    const draft = suggestBom({
+      systemKw: sizeKw,
+      systemType,
+      stock,
+      panelWatts: hardware.panelWatts,
+      batteryKwh: hardware.batteryKwh,
+      batteriesIncluded: settingNum(settings, 'pricing.batteries_included', 3),
+    })
+    onChange(draft.lines.map(({ stockItemId, quantity }) => ({ stockItemId, quantity })))
+  }
+
+  return (
+    <div className="pkg-bom">
+      <div className="row row--between row--wrap" style={{ gap: 'var(--space-2)' }}>
+        <span className="field__label" style={{ margin: 0 }}>
+          Equipment list (bill of materials)
+        </span>
+        <span className="row" style={{ gap: 'var(--space-2)' }}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={stock.length === 0 || !(sizeKw > 0)}
+            onClick={() => {
+              if (
+                lines.length === 0 ||
+                window.confirm('Replace the list with one drafted from the sizing rules?')
+              ) {
+                fillFromRules()
+              }
+            }}
+          >
+            Fill from the sizing rules
+          </Button>
+          {lines.length > 0 && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => onChange([])}>
+              Clear
+            </Button>
+          )}
+        </span>
+      </div>
+
+      {lines.length === 0 ? (
+        <p className="xs dim" style={{ margin: 0 }}>
+          Nothing listed. Until there is, quoting this package drafts the equipment from the sizing
+          rules each time.
+        </p>
+      ) : (
+        <div className="stack stack--sm">
+          {rows.map((row, index) => (
+            <div key={`${row.stockItemId}-${index}`} className="pkg-bom__line">
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="small strong">{row.item?.name ?? 'No longer in the catalogue'}</div>
+                <div className="xs dim">
+                  {row.item
+                    ? `${STOCK_CATEGORY_LABEL[row.item.category]} · ${row.item.sku} · ${currency(row.item.unitCost)} per ${row.item.unit}`
+                    : 'Skipped when quoting. Remove it, or add its replacement.'}
+                </div>
+              </div>
+              <input
+                className="input"
+                type="number"
+                min={0.01}
+                step="any"
+                value={row.quantity}
+                onChange={(e) => {
+                  const quantity = Number(e.target.value)
+                  onChange(
+                    lines.map((line, i) =>
+                      i === index ? { ...line, quantity: quantity > 0 ? quantity : 1 } : line,
+                    ),
+                  )
+                }}
+                style={{ width: 84 }}
+                aria-label={`Quantity of ${row.item?.name ?? 'this item'}`}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onChange(lines.filter((_, i) => i !== index))}
+                aria-label={`Remove ${row.item?.name ?? 'this item'}`}
+              >
+                ✕
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="row" style={{ gap: 'var(--space-2)' }}>
+        <select
+          className="select"
+          value={addItemId}
+          onChange={(e) => setAddItemId(e.target.value)}
+          aria-label="Add an item to the package"
+        >
+          <option value="">Add an item from the catalogue…</option>
+          {(Object.keys(STOCK_CATEGORY_LABEL) as StockCategory[]).map((category) => {
+            const items = stock.filter(
+              (s) => s.category === category && !lines.some((l) => l.stockItemId === s.id),
+            )
+            return items.length > 0 ? (
+              <optgroup key={category} label={STOCK_CATEGORY_LABEL[category]}>
+                {items.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null
+          })}
+        </select>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!addItemId}
+          onClick={() => {
+            onChange([...lines, { stockItemId: addItemId, quantity: 1 }])
+            setAddItemId('')
+          }}
+        >
+          Add
+        </Button>
+      </div>
+
+      {gaps.length > 0 && (
+        <div className="pkg-bom__warning small">
+          {gaps.map((gap) => (
+            <div key={gap}>⚠ {gap}</div>
+          ))}
+        </div>
+      )}
+
+      {materialCost > 0 && (
+        <p className="xs dim" style={{ margin: 0 }}>
+          Equipment {currency(materialCost)}. With labour ({labourPct}%) at the usual {margin}%
+          margin it prices at about <strong>{currency(pricedAt)}</strong>
+          {priceFrom > 0 &&
+            `; the website says from ${currency(priceFrom)}${
+              pricedAt > priceFrom * 1.05 ? ', so the advertised price may be too low' : ''
+            }`}
+          .
+        </p>
+      )}
+    </div>
+  )
 }
 
 export function PackagesEditor() {
@@ -55,6 +260,8 @@ export function PackagesEditor() {
 
   const [draft, setDraft] = useState(EMPTY_PACKAGE)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const packages = packagesQuery.data ?? []
+  const bomSupported = packages.length === 0 || packages.some((pkg) => pkg.bom !== null)
 
   function startEdit(pkg: EditablePackage) {
     setEditingId(pkg.id)
@@ -71,6 +278,7 @@ export function PackagesEditor() {
       inclusions: pkg.inclusions.join('\n'),
       isActive: pkg.isActive,
       sortOrder: pkg.sortOrder,
+      bom: pkg.bom ?? [],
     })
   }
 
@@ -94,6 +302,8 @@ export function PackagesEditor() {
         inclusions: draft.inclusions.split('\n'),
         isActive: draft.isActive,
         sortOrder: Number(draft.sortOrder),
+        // Sent only where the database can keep it (migration 0079).
+        ...(bomSupported ? { bom: draft.bom } : {}),
       },
       { onSuccess: reset },
     )
@@ -237,6 +447,21 @@ export function PackagesEditor() {
               />
             </div>
 
+            {bomSupported ? (
+              <PackageBomEditor
+                lines={draft.bom}
+                onChange={(bom) => setDraft({ ...draft, bom })}
+                systemType={draft.systemType}
+                sizeKw={Number(draft.sizeKw)}
+                priceFrom={Number(draft.priceFrom)}
+              />
+            ) : (
+              <p className="xs dim">
+                Equipment lists for packages need the latest database update (migration 0079). Run{' '}
+                <code>npx supabase db push</code>, then reload this page.
+              </p>
+            )}
+
             <div className="grid grid--2">
               <div className="field">
                 <label className="field__label" htmlFor="pkgOrder">
@@ -288,7 +513,7 @@ export function PackagesEditor() {
             emptyMessage="Add one and it appears on the public packages page immediately."
           >
             <div className="stack stack--sm">
-              {(packagesQuery.data ?? []).map((pkg) => (
+              {packages.map((pkg) => (
                 <div key={pkg.id} className="row row--between">
                   <div style={{ minWidth: 0 }}>
                     <div className="row" style={{ gap: 'var(--space-2)' }}>
@@ -298,6 +523,10 @@ export function PackagesEditor() {
                     </div>
                     <div className="xs dim">
                       {pkg.sizeKw} kWp · {currency(pkg.priceFrom)} · {pkg.segment}
+                      {pkg.bom &&
+                        (pkg.bom.length > 0
+                          ? ` · ${pkg.bom.length} item${pkg.bom.length === 1 ? '' : 's'} listed`
+                          : ' · no equipment list')}
                     </div>
                   </div>
                   <div className="row" style={{ gap: 'var(--space-2)' }}>

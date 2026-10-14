@@ -301,10 +301,10 @@ export function GovernancePage() {
             >
               <div className="stack stack--sm">
                 {(staffQuery.data ?? []).map((person) => (
-                  <div key={person.id} className="row row--between">
-                    <div className="row">
+                  <div key={person.id} className="row row--between row--wrap">
+                    <div className="row" style={{ minWidth: 0 }}>
                       <span className="avatar">{person.avatarInitials}</span>
-                      <div>
+                      <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                         <div className="small strong">
                           {person.fullName}
                           {person.id === user?.id && <span className="xs dim"> (you)</span>}
@@ -312,7 +312,9 @@ export function GovernancePage() {
                         <div className="xs dim">{person.email}</div>
                       </div>
                     </div>
-                    <div className="row">
+                    {/* Wraps under the name on a phone instead of pushing the
+                        page sideways. */}
+                    <div className="row" style={{ marginLeft: 'auto' }}>
                       {/* The role is shown, not offered. It can only be set
                           by approving a registration, and migration 0052
                           enforces that in the database — so removing this

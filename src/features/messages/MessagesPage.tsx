@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
+import { useAuth } from '@/app/auth/useAuth'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
@@ -35,6 +36,7 @@ import {
    ========================================================================== */
 
 export function MessagesPage() {
+  const { user } = useAuth()
   const conversationsQuery = useConversations()
   const conversations = conversationsQuery.data ?? []
 
@@ -189,15 +191,30 @@ export function MessagesPage() {
                   </div>
 
                   <div className="msg__bubbles">
-                    {(thread.data ?? []).map((message) => (
-                      <div
-                        key={message.id}
-                        className={`msg__bubble${message.mine ? ' msg__bubble--mine' : ''}`}
-                      >
-                        <p className="msg__body">{message.body}</p>
-                        <span className="xs dim">{relative(message.createdAt)}</span>
-                      </div>
-                    ))}
+                    {(thread.data ?? []).map((message, index, all) => {
+                      const mine = message.authorId === user?.id
+                      /* Each run of messages from one person is headed with
+                         their name, as in any chat app. Colour and side alone
+                         left people unsure who had written what. */
+                      const startsRun = index === 0 || all[index - 1].authorId !== message.authorId
+                      const author = mine
+                        ? 'You'
+                        : message.authorId && message.authorId === open.other?.id
+                          ? open.other.fullName
+                          : 'Removed account'
+                      return (
+                        <div
+                          key={message.id}
+                          className={`msg__item${mine ? ' msg__item--mine' : ''}`}
+                        >
+                          {startsRun && <span className="msg__author">{author}</span>}
+                          <div className="msg__bubble">
+                            <p className="msg__body">{message.body}</p>
+                            <span className="msg__time">{relative(message.createdAt)}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
                     <div ref={endOfThread} />
                   </div>
 

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { parsePackageBom } from '@/lib/bom'
 import { assertWritten, readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { Lead, LeadStage, Package } from '@/types/domain'
@@ -283,6 +284,7 @@ export function usePackages() {
         featured: row.featured,
         inclusions: row.inclusions ?? [],
         idealFor: row.ideal_for ?? '',
+        bom: parsePackageBom(row.bom),
       }))
     },
   })

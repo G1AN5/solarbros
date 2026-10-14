@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { parsePackageBom, serialisePackageBom, type PackageBomLine } from '@/lib/bom'
 import { readableDbError, throwReadable } from '@/lib/db-error'
 import { NOT_CONNECTED, supabase } from '@/lib/supabase'
 import type { SystemType } from '@/types/domain'
@@ -42,6 +43,8 @@ export interface EditablePackage {
   inclusions: string[]
   isActive: boolean
   sortOrder: number
+  /** Null when the database has not had migration 0079, which adds the list. */
+  bom: PackageBomLine[] | null
 }
 
 export function useAdminPackages() {
@@ -50,12 +53,10 @@ export function useAdminPackages() {
     queryFn: async (): Promise<EditablePackage[]> => {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
-      const { data, error } = await supabase
-        .from('packages')
-        .select(
-          `id, name, system_type, size_kw, price_from, segment, featured, ideal_for, inclusions, is_active, sort_order`,
-        )
-        .order('sort_order')
+      /* Every column rather than a list, so this keeps working on a database
+         that does not have `bom` yet — the editor then says so instead of
+         the whole page failing. */
+      const { data, error } = await supabase.from('packages').select('*').order('sort_order')
 
       if (error) throwReadable(error)
 
@@ -71,12 +72,17 @@ export function useAdminPackages() {
         inclusions: row.inclusions ?? [],
         isActive: row.is_active,
         sortOrder: row.sort_order,
+        bom: 'bom' in row ? parsePackageBom(row.bom) : null,
       }))
     },
   })
 }
 
-export type PackageDraft = Omit<EditablePackage, 'id'> & { id?: string }
+export type PackageDraft = Omit<EditablePackage, 'id' | 'bom'> & {
+  id?: string
+  /** Left out, the stored list is not touched. */
+  bom?: PackageBomLine[]
+}
 
 export function useSavePackage() {
   const queryClient = useQueryClient()
@@ -99,6 +105,7 @@ export function useSavePackage() {
         inclusions: input.inclusions.map((i) => i.trim()).filter(Boolean),
         is_active: input.isActive,
         sort_order: input.sortOrder,
+        ...(input.bom ? { bom: serialisePackageBom(input.bom) } : {}),
       }
 
       const query = input.id

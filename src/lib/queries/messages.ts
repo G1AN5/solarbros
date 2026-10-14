@@ -41,24 +41,34 @@ export interface ConversationSummary {
   unread: boolean
 }
 
+/* Whose message it is is worked out where it is drawn, from the person signed
+   in at that moment. It used to be stored in the cached thread, so after one
+   account signed out and another signed in on the same phone, the first
+   person's view of a thread could show until the next poll — with every
+   bubble on the wrong side and in the wrong colour. */
 export interface Message {
   id: string
   body: string
   createdAt: string
   authorId: string | null
-  mine: boolean
 }
 
+/* Every key carries the signed-in user, so one person's cached conversations
+   can never be served to the next person who signs in on the same device. */
 export const messageKeys = {
-  directory: ['messages', 'directory'] as const,
-  conversations: ['messages', 'conversations'] as const,
-  thread: (id: string) => ['messages', 'thread', id] as const,
+  all: (userId: string) => ['messages', userId] as const,
+  directory: (userId: string) => ['messages', userId, 'directory'] as const,
+  conversations: (userId: string) => ['messages', userId, 'conversations'] as const,
+  thread: (userId: string, id: string) => ['messages', userId, 'thread', id] as const,
 }
 
 /** Everybody the signed-in person is allowed to write to. */
 export function useMessageableDirectory() {
+  const { user } = useAuth()
+
   return useQuery({
-    queryKey: messageKeys.directory,
+    queryKey: messageKeys.directory(user?.id ?? 'none'),
+    enabled: Boolean(user),
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<Correspondent[]> => {
       if (!supabase) throw new Error(NOT_CONNECTED)
@@ -81,7 +91,7 @@ export function useConversations() {
   const { user } = useAuth()
 
   return useQuery({
-    queryKey: messageKeys.conversations,
+    queryKey: messageKeys.conversations(user?.id ?? 'none'),
     enabled: Boolean(user),
     // The list is a background thing; the open thread polls faster.
     refetchInterval: 30_000,
@@ -150,7 +160,7 @@ export function useThread(conversationId: string | undefined) {
   const { user } = useAuth()
 
   return useQuery({
-    queryKey: messageKeys.thread(conversationId ?? 'none'),
+    queryKey: messageKeys.thread(user?.id ?? 'none', conversationId ?? 'none'),
     enabled: Boolean(conversationId && user),
     // Fast enough to feel live while a thread is open; see the note at the top
     // about why this is not a websocket.
@@ -171,7 +181,6 @@ export function useThread(conversationId: string | undefined) {
         body: row.body,
         createdAt: row.created_at,
         authorId: row.author_id,
-        mine: row.author_id === user.id,
       }))
     },
   })
@@ -179,6 +188,7 @@ export function useThread(conversationId: string | undefined) {
 
 /** Starts a thread, or adds to the existing one with that person. */
 export function useStartConversation() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -193,9 +203,8 @@ export function useStartConversation() {
       if (error) throwReadable(error)
       return data as string
     },
-    onSuccess: (conversationId) => {
-      void queryClient.invalidateQueries({ queryKey: messageKeys.conversations })
-      void queryClient.invalidateQueries({ queryKey: messageKeys.thread(conversationId) })
+    onSuccess: () => {
+      if (user) void queryClient.invalidateQueries({ queryKey: messageKeys.all(user.id) })
     },
   })
 }
@@ -226,8 +235,11 @@ export function useSendMessage() {
       }
     },
     onSuccess: (_result, input) => {
-      void queryClient.invalidateQueries({ queryKey: messageKeys.thread(input.conversationId) })
-      void queryClient.invalidateQueries({ queryKey: messageKeys.conversations })
+      if (!user) return
+      void queryClient.invalidateQueries({
+        queryKey: messageKeys.thread(user.id, input.conversationId),
+      })
+      void queryClient.invalidateQueries({ queryKey: messageKeys.conversations(user.id) })
     },
   })
 }
@@ -247,7 +259,7 @@ export function useMarkRead() {
         .eq('user_id', user.id)
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: messageKeys.conversations })
+      if (user) void queryClient.invalidateQueries({ queryKey: messageKeys.conversations(user.id) })
     },
   })
 }

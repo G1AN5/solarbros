@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Session } from '@supabase/supabase-js'
 
 import { AuthContext, type AuthState, type AuthStatus, type SignUpInput } from './AuthContext'
@@ -106,8 +107,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  /* --- Load the profile whenever the signed-in user changes ----- */
+  /* --- One person's cached data never outlives their session ----------------
+     Everything fetched is cached in memory for this tab, and none of it was
+     dropped at sign-out. Signing out of one account and into another on the
+     same phone showed the first person's conversations, notifications and
+     records until each screen happened to refetch. Database security was never
+     in question; what the next person saw on screen was. */
+  const queryClient = useQueryClient()
   const userId = session?.user?.id
+  const previousUserId = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (previousUserId.current && previousUserId.current !== userId) queryClient.clear()
+    previousUserId.current = userId
+  }, [userId, queryClient])
+
+  /* --- Load the profile whenever the signed-in user changes ----- */
   useEffect(() => {
     if (!supabase || !userId) return
 

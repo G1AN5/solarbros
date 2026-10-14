@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/Badge'
+import { PhotoGrid } from '@/components/ui/PhotoGrid'
 import { currency, date as fmtDate, dateTime, humanize, number } from '@/lib/format'
 import {
   APPOINTMENT_STATUS_LABEL,
@@ -216,6 +217,14 @@ export function LeadDetails({ enquiry }: { enquiry: Enquiry }) {
               </Badge>
             </div>
           ))}
+
+          {/* What the technician photographed on the survey — the roof, the
+              shading, the main panel — for whoever prepares the quotation.
+              Once there is a project, the same photos are on its page too. */}
+          <div className="xs dim strong" style={{ marginTop: 'var(--space-2)' }}>
+            SITE PHOTOS
+          </div>
+          <PhotoGrid appointmentIds={enquiry.visits.map((visit) => visit.id)} />
         </div>
       )}
 

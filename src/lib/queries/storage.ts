@@ -276,22 +276,34 @@ export async function getPrivateFileUrl(
    photograph an engineer needed.
    ========================================================================== */
 
+/* A photo belongs to a project or, on a visit that has none yet — a site
+   survey comes before any contract — to the visit alone (migration 0079).
+   An installation's checklist counts what all of its visits have taken
+   between them; any other visit counts its own. */
 export const sitePhotoKeys = {
-  forProject: (projectId: string) => ['site-photos', projectId] as const,
+  all: ['site-photos'] as const,
+  forProject: (projectId: string) => ['site-photos', 'project', projectId] as const,
+  forVisit: (appointmentId: string) => ['site-photos', 'visit', appointmentId] as const,
 }
 
-export function useProjectPhotoCategories(projectId: string | undefined) {
+export function usePhotoCategories(scope: { projectId?: string; appointmentId?: string }) {
+  const { projectId, appointmentId } = scope
+
   return useQuery({
-    queryKey: sitePhotoKeys.forProject(projectId ?? 'none'),
-    enabled: Boolean(projectId),
+    queryKey: projectId
+      ? sitePhotoKeys.forProject(projectId)
+      : sitePhotoKeys.forVisit(appointmentId ?? 'none'),
+    enabled: Boolean(projectId || appointmentId),
     queryFn: async (): Promise<string[]> => {
       if (!supabase) throw new Error(NOT_CONNECTED)
 
-      const { data, error } = await supabase
+      const base = supabase
         .from('site_photos')
         .select('photo_category')
-        .eq('project_id', projectId!)
         .not('photo_category', 'is', null)
+      const { data, error } = await (projectId
+        ? base.eq('project_id', projectId)
+        : base.eq('appointment_id', appointmentId!))
 
       if (error) throwReadable(error)
       return Array.from(
@@ -307,7 +319,8 @@ export function useUploadSitePhoto() {
   return useMutation({
     mutationFn: async (input: {
       file: File
-      projectId: string
+      /** The installation. Absent on a visit that has no project yet. */
+      projectId?: string | null
       appointmentId?: string
       caption?: string
       category?: string
@@ -317,8 +330,14 @@ export function useUploadSitePhoto() {
     }): Promise<string> => {
       if (!supabase) throw new Error('Not connected to the backend.')
 
+      /* The folder is the project, or the visit when there is no project
+         yet. The storage rules decide who may open the file from it (0017),
+         or from the photo's record (0079). */
+      const folder = input.projectId || input.appointmentId
+      if (!folder) throw new Error('Choose the job this photo belongs to first.')
+
       const compressed = await compressImage(input.file)
-      const path = `${input.projectId}/${safeName(compressed.name)}`
+      const path = `${folder}/${safeName(compressed.name)}`
 
       const { error: uploadError } = await supabase.storage
         .from('site-photos')
@@ -327,7 +346,7 @@ export function useUploadSitePhoto() {
       if (uploadError) throwReadable(uploadError)
 
       const { error: rowError } = await supabase.from('site_photos').insert({
-        project_id: input.projectId,
+        project_id: input.projectId ?? null,
         appointment_id: input.appointmentId ?? null,
         storage_path: path,
         caption: input.caption ?? null,
@@ -345,8 +364,10 @@ export function useUploadSitePhoto() {
     },
     /* Without this the checklist keeps saying "Pending" for a photograph the
        technician has just taken, which reads as the upload having failed. */
-    onSuccess: (_path, input) => {
-      void queryClient.invalidateQueries({ queryKey: sitePhotoKeys.forProject(input.projectId) })
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: sitePhotoKeys.all })
+      // The photo grids on the project, the enquiry and the customer's tracker.
+      void queryClient.invalidateQueries({ queryKey: ['ops', 'photos'] })
     },
   })
 }

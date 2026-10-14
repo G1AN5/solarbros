@@ -254,7 +254,7 @@ export function PackagesPage() {
                 Run the estimator with your actual bill, or book a free consultation and we will
                 recommend a size based on your real consumption.
               </p>
-              <div className="row" style={{ justifyContent: 'center' }}>
+              <div className="row row--wrap" style={{ justifyContent: 'center' }}>
                 <ButtonLink to="/estimator" variant="primary">
                   Run the estimator
                 </ButtonLink>

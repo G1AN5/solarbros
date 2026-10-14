@@ -145,6 +145,8 @@ export interface Package {
   featured: boolean
   inclusions: string[]
   idealFor: string
+  /** The equipment the package is sold with — empty until somebody lists it. */
+  bom: { stockItemId: string; quantity: number }[]
 }
 
 /* --- Scheduling & dispatch --------------------------------------------------------

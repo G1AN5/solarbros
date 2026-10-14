@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { kwhInName, kwInName, suggestBom, wattsInName } from '../bom'
+import {
+  bomGaps,
+  kwhInName,
+  kwInName,
+  parsePackageBom,
+  serialisePackageBom,
+  suggestBom,
+  wattsInName,
+} from '../bom'
 import type { StockItem } from '@/types/domain'
 
 /* The starter catalogue from migration 0069, as the builder receives it.
@@ -137,5 +145,55 @@ describe('suggestBom', () => {
     const draft = suggestBom({ ...BASE, systemKw: 0, systemType: 'hybrid' })
     expect(draft.lines).toEqual([])
     expect(draft.warnings).toHaveLength(1)
+  })
+})
+
+describe('parsePackageBom', () => {
+  it('reads the stored list and merges an item listed twice', () => {
+    expect(
+      parsePackageBom([
+        { stock_item_id: 'panel', quantity: 10 },
+        { stock_item_id: 'clamp', quantity: '4' },
+        { stock_item_id: 'panel', quantity: 2 },
+      ]),
+    ).toEqual([
+      { stockItemId: 'panel', quantity: 12 },
+      { stockItemId: 'clamp', quantity: 4 },
+    ])
+  })
+
+  it('drops what cannot be used rather than failing the page', () => {
+    expect(parsePackageBom(undefined)).toEqual([])
+    expect(parsePackageBom('not a list')).toEqual([])
+    expect(
+      parsePackageBom([
+        null,
+        { stock_item_id: '', quantity: 1 },
+        { stock_item_id: 'x', quantity: 0 },
+        { stock_item_id: 'y', quantity: 'many' },
+        { quantity: 3 },
+      ]),
+    ).toEqual([])
+  })
+
+  it('round-trips through the stored shape', () => {
+    const lines = [
+      { stockItemId: 'a', quantity: 1 },
+      { stockItemId: 'b', quantity: 2.5 },
+    ]
+    expect(parsePackageBom(serialisePackageBom(lines))).toEqual(lines)
+  })
+})
+
+describe('bomGaps', () => {
+  it('asks for batteries only where the system type needs them', () => {
+    expect(bomGaps('on_grid', ['panel', 'inverter'])).toEqual([])
+    expect(bomGaps('hybrid', ['panel', 'inverter'])).toEqual([
+      'No batteries — a hybrid or off-grid system needs them.',
+    ])
+  })
+
+  it('names every missing essential', () => {
+    expect(bomGaps('off_grid', ['racking'])).toHaveLength(3)
   })
 })
